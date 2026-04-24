@@ -1,0 +1,20 @@
+{
+  "name": "axl-otel",
+  "version": "0.1.0",
+  "main": "src/index.ts",
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.5.0"
+  },
+  "private": true,
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "dev": "bun --watch run src/index.ts",
+    "build": "bun build --compile --minify --sourcemap src/index.ts --outfile axl-otel",
+    "build:linux-x64": "bun build --compile --minify --sourcemap --target=bun-linux-x64 src/index.ts --outfile axl-otel-linux-x64",
+    "build:linux-arm64": "bun build --compile --minify --sourcemap --target=bun-linux-arm64 src/index.ts --outfile axl-otel-linux-arm64",
+    "build:darwin-arm64": "bun build --compile --minify --sourcemap --target=bun-darwin-arm64 src/index.ts --outfile axl-otel-darwin-arm64",
+    "typecheck": "tsc --noEmit"
+  },
+  "type": "module"
+}
