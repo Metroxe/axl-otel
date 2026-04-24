@@ -16,5 +16,8 @@
     "build:darwin-arm64": "bun build --compile --minify --sourcemap --target=bun-darwin-arm64 src/index.ts --outfile axl-otel-darwin-arm64",
     "typecheck": "tsc --noEmit"
   },
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "zod": "^4.3.6"
+  }
 }

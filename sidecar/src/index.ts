@@ -1,5 +1,5 @@
 import { parseArgs } from "node:util";
-import { AxlClient } from "./axl.ts";
+import { AxlClient, type RecvMessage } from "./axl.ts";
 import type { ExportTraceServiceRequest } from "./otlp.ts";
 import { startPoller } from "./poller.ts";
 import { startReceiver } from "./receiver.ts";
@@ -100,12 +100,9 @@ if (receiveMode) {
   });
 }
 
-function extractOtlpPayload(msg: unknown): ExportTraceServiceRequest | null {
-  if (!msg || typeof msg !== "object") return null;
-  const m = msg as Record<string, unknown>;
-  // Already-decoded JSON object on a known field.
+function extractOtlpPayload(msg: RecvMessage): ExportTraceServiceRequest | null {
   for (const key of ["data", "body", "payload", "message"]) {
-    const v = m[key];
+    const v = msg[key];
     if (v && typeof v === "object") return v as ExportTraceServiceRequest;
     if (typeof v === "string") {
       try {
@@ -115,7 +112,6 @@ function extractOtlpPayload(msg: unknown): ExportTraceServiceRequest | null {
       }
     }
   }
-  // Or the message itself is the OTLP envelope.
-  if ("resourceSpans" in m) return m as ExportTraceServiceRequest;
+  if ("resourceSpans" in msg) return msg as ExportTraceServiceRequest;
   return null;
 }

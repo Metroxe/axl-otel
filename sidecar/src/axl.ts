@@ -1,5 +1,22 @@
+import { z } from "zod";
+
 // Thin client over AXL's local HTTP API at e.g. http://localhost:9002.
 // Reference: https://github.com/gensyn-ai/axl/blob/main/docs/api.md
+
+const TopologySchema = z.object({
+  peer_id: z.string().optional(),
+  peerId: z.string().optional(),
+  self: z.string().optional(),
+  id: z.string().optional(),
+});
+
+const RecvMessageSchema = z.record(z.string(), z.unknown());
+export type RecvMessage = z.infer<typeof RecvMessageSchema>;
+
+const RecvResponseSchema = z.union([
+  z.array(RecvMessageSchema),
+  z.object({ messages: z.array(RecvMessageSchema) }),
+]);
 
 export type AxlConfig = { baseUrl: string };
 
@@ -11,10 +28,8 @@ export class AxlClient {
     if (!res.ok) {
       throw new Error(`AXL /topology failed: ${res.status} ${res.statusText}`);
     }
-    const body = (await res.json()) as Record<string, unknown>;
-    const id = (body.peer_id ?? body.peerId ?? body.self ?? body.id) as
-      | string
-      | undefined;
+    const body = TopologySchema.parse(await res.json());
+    const id = body.peer_id ?? body.peerId ?? body.self ?? body.id;
     if (!id) {
       throw new Error(
         `AXL /topology response missing peer ID (got keys: ${Object.keys(body).join(", ")})`,
@@ -37,19 +52,12 @@ export class AxlClient {
     }
   }
 
-  // AXL's /recv envelope format is determined by AXL itself; we treat each
-  // entry as opaque here and let the caller pull the payload out.
-  async recv(): Promise<unknown[]> {
+  async recv(): Promise<RecvMessage[]> {
     const res = await fetch(`${this.cfg.baseUrl}/recv`);
     if (!res.ok) {
       throw new Error(`AXL /recv failed: ${res.status} ${res.statusText}`);
     }
-    const body = (await res.json()) as unknown;
-    if (Array.isArray(body)) return body;
-    if (body && typeof body === "object" && "messages" in body) {
-      const msgs = (body as { messages: unknown }).messages;
-      if (Array.isArray(msgs)) return msgs;
-    }
-    return [];
+    const body = RecvResponseSchema.parse(await res.json());
+    return Array.isArray(body) ? body : body.messages;
   }
 }

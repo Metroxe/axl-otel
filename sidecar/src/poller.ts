@@ -1,9 +1,9 @@
-import type { AxlClient } from "./axl.ts";
+import type { AxlClient, RecvMessage } from "./axl.ts";
 
 export type PollerOptions = {
   axl: AxlClient;
   intervalMs: number;
-  onMessage: (msg: unknown) => Promise<void>;
+  onMessage: (msg: RecvMessage) => Promise<void>;
 };
 
 // Polls AXL /recv on a fixed interval and dispatches each inbound message.
