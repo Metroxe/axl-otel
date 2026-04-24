@@ -119,7 +119,7 @@ axl-otel/
 │   ├── package.json
 │   └── src/
 ├── example/                 ← reproducible 5-agent demo
-│   ├── README.md
+│    ├── README.md
 │   ├── docker-compose.yml
 │   ├── scripts/
 │   │   ├── generate-keys.sh ← generates ed25519 keys per agent
@@ -135,9 +135,6 @@ axl-otel/
 │       ├── web-search/
 │       ├── fact-checker/
 │       └── citation-db/
-└── hello-world/             ← minimal integration example
-    ├── README.md
-    └── index.ts
 ```
 
 ## Example workflow
