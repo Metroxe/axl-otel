@@ -124,4 +124,38 @@ h2 {
 #events .k.start { color: var(--accent); }
 #events .k.end-ok { color: var(--good); }
 #events .k.end-bad { color: var(--bad); }
-#events .body { color: var(--text); flex: 1; word-break: break-word; }
+#events .body {
+  color: var(--text);
+  flex: 1;
+  word-break: break-word;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.peer-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(122, 162, 247, 0.12);
+  border: 1px solid rgba(122, 162, 247, 0.35);
+  border-radius: 4px;
+  padding: 1px 0.45rem;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.peer-badge .peer-name {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.peer-badge .peer-id {
+  color: var(--muted);
+}
+
+.msg {
+  flex: 1;
+  min-width: 0;
+}

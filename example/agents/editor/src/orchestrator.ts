@@ -187,54 +187,73 @@ async function runEditorTool(
     bus: EventBus;
   },
 ): Promise<string> {
+  // Resolve which mesh peer this tool maps to up-front so the SSE event
+  // can name the destination clearly.
+  const route = TOOL_ROUTES[name];
+  if (!route) {
+    const message = `unknown tool: ${name}`;
+    ctx.bus.publish({ type: "tool-end", tool: name, ok: false, message });
+    return JSON.stringify({ error: message });
+  }
+
+  const peerId = readPeerId(route.peer);
   const span = ctx.tracer.startSpan(`editor.tool.${name}`, {
     kind: SpanKind.INTERNAL,
-    attributes: { "editor.tool": name },
+    attributes: {
+      "editor.tool": name,
+      "peer.name": route.peer,
+      "peer.id": peerId,
+    },
   });
 
-  ctx.bus.publish({ type: "tool-start", tool: name, input });
+  ctx.bus.publish({
+    type: "tool-start",
+    tool: name,
+    peer: route.peer,
+    peerId,
+    input,
+  });
 
   try {
     return await context.with(
       trace.setSpan(context.active(), span),
       async () => {
-        if (name === "research") {
-          const peer = readPeerId("researcher");
-          const result = await callMcp({
-            axlUrl: ctx.axlUrl,
-            peerId: peer,
-            service: "researcher",
-            tool: "research",
-            args: input,
-            tracer: ctx.tracer,
-          });
-          ctx.bus.publish({ type: "tool-end", tool: name, ok: true });
-          return JSON.stringify(result);
-        }
-        if (name === "fact_check") {
-          const peer = readPeerId("fact-checker");
-          const result = await callMcp({
-            axlUrl: ctx.axlUrl,
-            peerId: peer,
-            service: "fact-checker",
-            tool: "check",
-            args: input,
-            tracer: ctx.tracer,
-          });
-          ctx.bus.publish({ type: "tool-end", tool: name, ok: true });
-          return JSON.stringify(result);
-        }
-        const message = `unknown tool: ${name}`;
-        ctx.bus.publish({ type: "tool-end", tool: name, ok: false, message });
-        return JSON.stringify({ error: message });
+        const result = await callMcp({
+          axlUrl: ctx.axlUrl,
+          peerId,
+          service: route.service,
+          tool: route.tool,
+          args: input,
+          tracer: ctx.tracer,
+        });
+        ctx.bus.publish({
+          type: "tool-end",
+          tool: name,
+          peer: route.peer,
+          peerId,
+          ok: true,
+        });
+        return JSON.stringify(result);
       },
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     span.setStatus({ code: SpanStatusCode.ERROR, message });
-    ctx.bus.publish({ type: "tool-end", tool: name, ok: false, message });
+    ctx.bus.publish({
+      type: "tool-end",
+      tool: name,
+      peer: route.peer,
+      peerId,
+      ok: false,
+      message,
+    });
     return JSON.stringify({ error: message });
   } finally {
     span.end();
   }
 }
+
+const TOOL_ROUTES: Record<string, { peer: string; service: string; tool: string }> = {
+  research: { peer: "researcher", service: "researcher", tool: "research" },
+  fact_check: { peer: "fact-checker", service: "fact-checker", tool: "check" },
+};

@@ -41,26 +41,41 @@ function appendEvent(event) {
     case "tool-start":
       k.classList.add("start");
       k.textContent = "tool ▶";
-      body.textContent = `${event.tool}(${formatInput(event.input)})`;
+      body.append(
+        peerBadge(event.peer, event.peerId),
+        textNode(`${event.tool}(${formatInput(event.input)})`),
+      );
       break;
     case "tool-end":
       k.classList.add(event.ok ? "end-ok" : "end-bad");
       k.textContent = event.ok ? "tool ✓" : "tool ✗";
-      body.textContent = event.ok
-        ? event.tool
-        : `${event.tool}: ${event.message ?? "error"}`;
+      body.append(
+        peerBadge(event.peer, event.peerId),
+        textNode(
+          event.ok
+            ? event.tool
+            : `${event.tool}: ${event.message ?? "error"}`,
+        ),
+      );
       break;
-    case "span-start":
+    case "span-start": {
       k.classList.add("start");
       k.textContent = "span ▶";
-      body.textContent = event.span?.name ?? "(unknown)";
+      const peer = spanPeer(event.span);
+      if (peer) body.appendChild(peerBadge(peer.name, peer.id));
+      body.appendChild(textNode(event.span?.name ?? "(unknown)"));
       break;
+    }
     case "span-end": {
       const ok = event.span?.statusCode !== 2;
       k.classList.add(ok ? "end-ok" : "end-bad");
       k.textContent = ok ? "span ✓" : "span ✗";
       const dur = event.span?.durationMs?.toFixed?.(1) ?? "?";
-      body.textContent = `${event.span?.name ?? "(unknown)"} (${dur} ms)`;
+      const peer = spanPeer(event.span);
+      if (peer) body.appendChild(peerBadge(peer.name, peer.id));
+      body.appendChild(
+        textNode(`${event.span?.name ?? "(unknown)"} (${dur} ms)`),
+      );
       break;
     }
     case "result":
@@ -85,6 +100,44 @@ function appendEvent(event) {
 function formatTime(ts) {
   const d = new Date(ts);
   return d.toTimeString().slice(0, 8);
+}
+
+// Pulls a peer name + peer id off a span event. tool-start/end carry the
+// fields directly; span-* events expose them via attributes from the
+// editor's custom SpanProcessor.
+function spanPeer(span) {
+  if (!span) return null;
+  const attrs = span.attributes ?? {};
+  const name = attrs["peer.name"] ?? attrs["mcp.service"];
+  const id = attrs["peer.id"];
+  if (!name && !id) return null;
+  return { name: name ?? null, id: id ?? null };
+}
+
+function peerBadge(name, id) {
+  const wrap = document.createElement("span");
+  wrap.className = "peer-badge";
+  wrap.title = id ? `${name ?? "peer"}\npeer id: ${id}` : name ?? "";
+  if (name) {
+    const n = document.createElement("span");
+    n.className = "peer-name";
+    n.textContent = "→ " + name;
+    wrap.appendChild(n);
+  }
+  if (id) {
+    const idEl = document.createElement("span");
+    idEl.className = "peer-id";
+    idEl.textContent = id.slice(0, 8) + "…";
+    wrap.appendChild(idEl);
+  }
+  return wrap;
+}
+
+function textNode(text) {
+  const span = document.createElement("span");
+  span.className = "msg";
+  span.textContent = text;
+  return span;
 }
 
 function formatInput(input) {
