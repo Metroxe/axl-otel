@@ -1,18 +1,114 @@
 services:
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    hostname: jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"
+    networks:
+      - mesh
+    restart: unless-stopped
+
   editor:
     build:
-      context: ./agents/editor
+      context: ..
+      dockerfile: example/agents/editor/Dockerfile
     image: axl-otel-editor
     container_name: editor
     hostname: editor
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      JAEGER_OTLP_URL: http://jaeger:4318
+      OTEL_SERVICE_NAME: editor
+      SIDECAR_RECEIVE: "1"
     ports:
       - "8080:8080"
-      - "9001:9001"
     volumes:
       - ./keys/editor.pem:/etc/axl/private.pem:ro
       - ./configs/editor/node-config.json:/etc/axl/node-config.json:ro
+      - ./configs/peers:/etc/axl/peers:ro
     networks:
       - mesh
+    depends_on:
+      - jaeger
+    restart: unless-stopped
+
+  researcher:
+    build:
+      context: ..
+      dockerfile: example/agents/researcher/Dockerfile
+    image: axl-otel-researcher
+    container_name: researcher
+    hostname: researcher
+    environment:
+      OTEL_SERVICE_NAME: researcher
+    volumes:
+      - ./keys/researcher.pem:/etc/axl/private.pem:ro
+      - ./configs/researcher/node-config.json:/etc/axl/node-config.json:ro
+      - ./configs/peers:/etc/axl/peers:ro
+    networks:
+      - mesh
+    depends_on:
+      - editor
+    restart: unless-stopped
+
+  web-search:
+    build:
+      context: ..
+      dockerfile: example/agents/web-search/Dockerfile
+    image: axl-otel-web-search
+    container_name: web-search
+    hostname: web-search
+    environment:
+      OTEL_SERVICE_NAME: web-search
+    volumes:
+      - ./keys/web-search.pem:/etc/axl/private.pem:ro
+      - ./configs/web-search/node-config.json:/etc/axl/node-config.json:ro
+      - ./configs/peers:/etc/axl/peers:ro
+    networks:
+      - mesh
+    depends_on:
+      - editor
+    restart: unless-stopped
+
+  fact-checker:
+    build:
+      context: ..
+      dockerfile: example/agents/fact-checker/Dockerfile
+    image: axl-otel-fact-checker
+    container_name: fact-checker
+    hostname: fact-checker
+    environment:
+      OTEL_SERVICE_NAME: fact-checker
+    volumes:
+      - ./keys/fact-checker.pem:/etc/axl/private.pem:ro
+      - ./configs/fact-checker/node-config.json:/etc/axl/node-config.json:ro
+      - ./configs/peers:/etc/axl/peers:ro
+    networks:
+      - mesh
+    depends_on:
+      - editor
+    restart: unless-stopped
+
+  citation-db:
+    build:
+      context: ..
+      dockerfile: example/agents/citation-db/Dockerfile
+    image: axl-otel-citation-db
+    container_name: citation-db
+    hostname: citation-db
+    environment:
+      OTEL_SERVICE_NAME: citation-db
+    volumes:
+      - ./keys/citation-db.pem:/etc/axl/private.pem:ro
+      - ./configs/citation-db/node-config.json:/etc/axl/node-config.json:ro
+      - ./configs/peers:/etc/axl/peers:ro
+    networks:
+      - mesh
+    depends_on:
+      - editor
     restart: unless-stopped
 
 networks:

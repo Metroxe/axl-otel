@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AXL OTel demo · Editor</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>AXL OTel demo</h1>
+      <p class="sub">
+        Editor orchestrates a 5-agent peer-to-peer mesh; spans flow back to
+        the originator's Jaeger via the OTel sidecar.
+      </p>
+      <p class="peer">
+        Editor peer id: <code id="peer-id">…</code>
+        <a href="http://localhost:16686/" target="_blank" rel="noopener">
+          open Jaeger →
+        </a>
+      </p>
+    </header>
+
+    <main>
+      <section class="run">
+        <label for="prompt">Prompt</label>
+        <textarea
+          id="prompt"
+          rows="4"
+          placeholder="e.g. Explain how OpenTelemetry baggage propagates over MCP, and verify the claim against reputable sources."
+        ></textarea>
+        <button id="run">Run workflow</button>
+        <div id="result" class="result" hidden></div>
+      </section>
+
+      <section class="activity">
+        <h2>Mesh activity</h2>
+        <ol id="events"></ol>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

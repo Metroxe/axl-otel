@@ -26,19 +26,18 @@ RUN bun install --frozen-lockfile
 COPY sidecar/src ./src
 
 WORKDIR /app
-COPY example/agents/editor/package.json ./
+COPY example/agents/researcher/package.json ./
 RUN bun install
-COPY example/agents/editor/src ./src
-COPY example/agents/editor/public ./public
-COPY example/agents/editor/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY example/agents/researcher/src ./src
+COPY example/agents/researcher/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 ENV AXL_URL=http://127.0.0.1:9002 \
     AXL_CONFIG=/etc/axl/node-config.json \
     OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318 \
     MCP_ROUTER_URL=http://127.0.0.1:9003 \
-    AXL_PEERS_DIR=/etc/axl/peers \
-    PORT=8080
+    MCP_LISTEN_PORT=7100 \
+    AXL_PEERS_DIR=/etc/axl/peers
 
-EXPOSE 8080 9001 9002 9003 4318
+EXPOSE 9001 9002 9003 4318 7100
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint.sh"]

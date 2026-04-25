@@ -13,14 +13,12 @@ cd "$(dirname "${CONFIG}")"
 axl-node -config "${CONFIG}" &
 AXL_PID=$!
 
-# 2. AXL Python MCP router on :9003 — present for symmetry with the other
-# containers; the editor is the originator and doesn't itself register an
-# MCP service, so the router has no backends but stays harmless.
+# 2. AXL Python MCP router on :9003 — bridges incoming MCP traffic to the
+# local MCP server. Bundled with the AXL repo under integrations/.
 python -m mcp_routing.mcp_router --port 9003 &
 ROUTER_PID=$!
 
-# 3. OTel sidecar — listens on :4318 for OTLP, polls /recv for inbound spans
-# from remote peers in --receive mode.
+# 3. OTel sidecar — listens on :4318 for OTLP, routes spans by originator.
 SIDECAR_ARGS=(
   --axl-url "${AXL_URL:-http://127.0.0.1:9002}"
   --jaeger-url "${JAEGER_OTLP_URL:-http://jaeger:4318}"
@@ -34,7 +32,7 @@ cd /sidecar
 bun run src/index.ts "${SIDECAR_ARGS[@]}" &
 SIDECAR_PID=$!
 
-# 4. Editor — Bun HTTP server on :8080 (frontend + /run + /events).
+# 4. Agent code — registers an MCP server with the router and serves tools.
 cd /app
 bun run src/index.ts &
 APP_PID=$!
