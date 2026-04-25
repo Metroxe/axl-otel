@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-AGENTS=(editor)
+AGENTS=(editor researcher web-search fact-checker citation-db)
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 KEYS_DIR="${ROOT}/keys"
