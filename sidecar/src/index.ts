@@ -63,19 +63,18 @@ async function run(opts: CliOptions): Promise<void> {
   }
 }
 
+// The sidecar's `/send` side encodes ExportTraceServiceRequest as JSON, so
+// /recv bodies are JSON strings we just need to parse.
 function extractOtlpPayload(msg: RecvMessage): ExportTraceServiceRequest | null {
-  for (const key of ["data", "body", "payload", "message"]) {
-    const v = msg[key];
-    if (v && typeof v === "object") return v as ExportTraceServiceRequest;
-    if (typeof v === "string") {
-      try {
-        return JSON.parse(v) as ExportTraceServiceRequest;
-      } catch {
-        // fallthrough
-      }
+  if (!msg.body) return null;
+  try {
+    const parsed = JSON.parse(msg.body);
+    if (parsed && typeof parsed === "object" && "resourceSpans" in parsed) {
+      return parsed as ExportTraceServiceRequest;
     }
+  } catch (err) {
+    console.error("axl-otel: failed to parse /recv body as JSON:", err);
   }
-  if ("resourceSpans" in msg) return msg as ExportTraceServiceRequest;
   return null;
 }
 
