@@ -28,7 +28,7 @@ services:
     volumes:
       - ./keys/editor.pem:/etc/axl/private.pem:ro
       - ./configs/editor/node-config.json:/etc/axl/node-config.json:ro
-      - ./configs/peers:/etc/axl/peers:ro
+      - ./configs/peers-editor:/etc/axl/peers:ro
     networks:
       - mesh
     depends_on:
@@ -44,10 +44,16 @@ services:
     hostname: researcher
     environment:
       OTEL_SERVICE_NAME: researcher
+      # Non-originators must never talk to the originator's Jaeger directly:
+      # all spans that don't belong to this peer should leave via AXL /send.
+      # Pointing local-forward at an unreachable port enforces that — if a
+      # span ever fell into the "forward locally" branch, you'd see an
+      # ECONNREFUSED in the logs instead of silent direct delivery.
+      JAEGER_OTLP_URL: http://127.0.0.1:65535
     volumes:
       - ./keys/researcher.pem:/etc/axl/private.pem:ro
       - ./configs/researcher/node-config.json:/etc/axl/node-config.json:ro
-      - ./configs/peers:/etc/axl/peers:ro
+      - ./configs/peers-researcher:/etc/axl/peers:ro
     networks:
       - mesh
     depends_on:
@@ -63,14 +69,15 @@ services:
     hostname: web-search
     environment:
       OTEL_SERVICE_NAME: web-search
+      JAEGER_OTLP_URL: http://127.0.0.1:65535
     volumes:
       - ./keys/web-search.pem:/etc/axl/private.pem:ro
       - ./configs/web-search/node-config.json:/etc/axl/node-config.json:ro
-      - ./configs/peers:/etc/axl/peers:ro
+      - ./configs/peers-web-search:/etc/axl/peers:ro
     networks:
       - mesh
     depends_on:
-      - editor
+      - researcher
     restart: unless-stopped
 
   fact-checker:
@@ -82,10 +89,11 @@ services:
     hostname: fact-checker
     environment:
       OTEL_SERVICE_NAME: fact-checker
+      JAEGER_OTLP_URL: http://127.0.0.1:65535
     volumes:
       - ./keys/fact-checker.pem:/etc/axl/private.pem:ro
       - ./configs/fact-checker/node-config.json:/etc/axl/node-config.json:ro
-      - ./configs/peers:/etc/axl/peers:ro
+      - ./configs/peers-fact-checker:/etc/axl/peers:ro
     networks:
       - mesh
     depends_on:
@@ -101,14 +109,15 @@ services:
     hostname: citation-db
     environment:
       OTEL_SERVICE_NAME: citation-db
+      JAEGER_OTLP_URL: http://127.0.0.1:65535
     volumes:
       - ./keys/citation-db.pem:/etc/axl/private.pem:ro
       - ./configs/citation-db/node-config.json:/etc/axl/node-config.json:ro
-      - ./configs/peers:/etc/axl/peers:ro
+      - ./configs/peers-citation-db:/etc/axl/peers:ro
     networks:
       - mesh
     depends_on:
-      - editor
+      - fact-checker
     restart: unless-stopped
 
 networks:
