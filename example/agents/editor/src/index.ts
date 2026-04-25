@@ -94,6 +94,9 @@ async function serveStatic(pathname: string): Promise<Response> {
 Bun.serve({
   port: PORT,
   hostname: "0.0.0.0",
+  // SSE streams on /events stay open indefinitely, and /run can run for
+  // longer than Bun's 10s default while Claude is in its tool-use loop.
+  idleTimeout: 0,
   async fetch(req) {
     const url = new URL(req.url);
 

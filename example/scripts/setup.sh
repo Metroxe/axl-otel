@@ -36,7 +36,9 @@ write_config() {
   "Peers": ${peers},
   "Listen": ${listen},
   "bridge_addr": "127.0.0.1",
-  "api_port": 9002
+  "api_port": 9002,
+  "router_addr": "http://127.0.0.1",
+  "router_port": 9003
 }
 EOF
   echo "configs: wrote ${out#${ROOT}/}"
