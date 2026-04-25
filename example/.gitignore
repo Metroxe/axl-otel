@@ -4,3 +4,7 @@ configs/
 
 # Per-agent installed deps.
 agents/*/node_modules/
+
+# Local secrets for docker compose (ANTHROPIC_API_KEY, etc.). Check in
+# .env.example with placeholders; never commit the real file.
+.env
