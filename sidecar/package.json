@@ -14,7 +14,8 @@
     "build:linux-x64": "bun build --compile --minify --sourcemap --target=bun-linux-x64 src/index.ts --outfile axl-otel-linux-x64",
     "build:linux-arm64": "bun build --compile --minify --sourcemap --target=bun-linux-arm64 src/index.ts --outfile axl-otel-linux-arm64",
     "build:darwin-arm64": "bun build --compile --minify --sourcemap --target=bun-darwin-arm64 src/index.ts --outfile axl-otel-darwin-arm64",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
   },
   "type": "module",
   "dependencies": {
