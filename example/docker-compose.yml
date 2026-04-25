@@ -1,0 +1,20 @@
+services:
+  editor:
+    build:
+      context: ./agents/editor
+    image: axl-otel-editor
+    container_name: editor
+    hostname: editor
+    ports:
+      - "8080:8080"
+      - "9001:9001"
+    volumes:
+      - ./keys/editor.pem:/etc/axl/private.pem:ro
+      - ./configs/editor/node-config.json:/etc/axl/node-config.json:ro
+    networks:
+      - mesh
+    restart: unless-stopped
+
+networks:
+  mesh:
+    driver: bridge
