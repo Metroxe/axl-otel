@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { SpanKind } from "@opentelemetry/api";
 import { initOtel } from "./otel.ts";
 import { orchestrate } from "./orchestrator.ts";
 import { EventBus } from "./sse.ts";
@@ -82,11 +83,27 @@ function sseStream(req: Request): Response {
   });
 }
 
-async function serveStatic(pathname: string): Promise<Response> {
+async function serveStatic(
+  pathname: string,
+  userAgent: string | null,
+): Promise<Response> {
   const rel = pathname === "/" ? "/index.html" : pathname;
   const file = Bun.file(`${PUBLIC_DIR}${rel.replace(/^\//, "")}`);
   if (!(await file.exists())) {
     return new Response("not found", { status: 404 });
+  }
+  // Emit a span on every page load so the editor service registers with
+  // Jaeger immediately on first visit, not just after the first /run.
+  if (rel === "/index.html") {
+    const span = tracer.startSpan("editor.page-load", {
+      kind: SpanKind.SERVER,
+      attributes: {
+        "http.method": "GET",
+        "http.target": pathname,
+        "http.user_agent": userAgent ?? "",
+      },
+    });
+    span.end();
   }
   return new Response(file);
 }
@@ -139,7 +156,7 @@ Bun.serve({
     }
 
     if (req.method === "GET") {
-      return serveStatic(url.pathname);
+      return serveStatic(url.pathname, req.headers.get("user-agent"));
     }
 
     return new Response("method not allowed", { status: 405 });
