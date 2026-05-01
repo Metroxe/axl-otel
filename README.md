@@ -7,7 +7,7 @@
     to the originator. No central collector, no shared infra.
   </p>
 
-  <img src="assets/cover.gif" alt="A request fans out across an AXL mesh and every span comes back home" width="720" />
+  <img src="assets/cover-hires.gif" alt="A request fans out across an AXL mesh and every span comes back home" width="720" />
 
   <p>
     <a href="SPEC.md">Spec</a> &middot;
