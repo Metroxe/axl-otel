@@ -5,6 +5,10 @@ services:
     hostname: jaeger
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
+      # Serve the UI under /jaeger/ so a single reverse-proxy hostname can
+      # multiplex Editor (/) and Jaeger (/jaeger/). The QUERY_BASE_PATH env
+      # is the supported way to reroot Jaeger's static asset and API URLs.
+      QUERY_BASE_PATH: /jaeger
     ports:
       - "16686:16686"
     networks:
@@ -23,6 +27,13 @@ services:
       OTLP_URL: http://jaeger:4318
       OTEL_SERVICE_NAME: editor
       SIDECAR_RECEIVE: "1"
+      # Public Jaeger URL exposed by the reverse proxy. The Editor serves
+      # the frontend at the apex and Jaeger under /jaeger/ on the same host.
+      JAEGER_UI_URL: ${JAEGER_UI_URL:-/jaeger/}
+      # Public-demo abuse limits. Both default to safe values; override via
+      # env on the VPS if you want to raise/lower the cap.
+      RATE_LIMIT_PER_IP_HOUR: ${RATE_LIMIT_PER_IP_HOUR:-3}
+      RATE_LIMIT_GLOBAL_DAY: ${RATE_LIMIT_GLOBAL_DAY:-50}
     ports:
       - "8080:8080"
     volumes:

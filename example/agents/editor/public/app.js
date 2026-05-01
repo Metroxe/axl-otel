@@ -4,9 +4,30 @@ const resultEl = document.getElementById("result");
 const eventsEl = document.getElementById("events");
 const peerEl = document.getElementById("peer-id");
 const historyEl = document.getElementById("history");
+const rateWarnEl = document.getElementById("rate-warn");
+const jaegerLinkEls = [
+  document.getElementById("jaeger-link"),
+  document.getElementById("jaeger-link-2"),
+].filter(Boolean);
 
-let jaegerUiUrl = "http://localhost:16686";
+let jaegerUiUrl = "/jaeger/";
 const historyEntries = new Map();
+
+// Tools called directly by the editor map to mesh peers; each direct peer in
+// turn fans out to a transitive peer. We use that mapping to drive the
+// visual: when the editor's tool-end carries the upstream MCP result, we can
+// also populate the transitive child node with what came back from it.
+const TOOL_TO_NODE = {
+  research: "researcher",
+  fact_check: "fact-checker",
+};
+const NODE_TO_CHILD = {
+  researcher: "web-search",
+  "fact-checker": "citation-db",
+};
+const NODE_TO_PARENT = Object.fromEntries(
+  Object.entries(NODE_TO_CHILD).map(([p, c]) => [c, p]),
+);
 
 const events = new EventSource("/events");
 
@@ -23,7 +44,8 @@ events.addEventListener("message", (msg) => {
       peerEl.title = event.peer_id;
     }
     if (event.jaeger_ui_url) {
-      jaegerUiUrl = event.jaeger_ui_url.replace(/\/+$/, "");
+      jaegerUiUrl = event.jaeger_ui_url.replace(/\/+$/, "") + "/";
+      for (const a of jaegerLinkEls) a.href = jaegerUiUrl;
     }
     return;
   }
@@ -32,15 +54,43 @@ events.addEventListener("message", (msg) => {
     return;
   }
   if (event.type === "request-start") {
+    resetMesh();
+    setNodeStatus("editor", "running", { traceId: event.traceId });
     upsertHistoryEntry({
       traceId: event.traceId,
       prompt: event.prompt,
       startedAt: event.startedAt ?? event.ts,
       status: "running",
     });
+    appendEvent(event);
     return;
   }
-  if (event.type === "result" && event.traceId) {
+  if (event.type === "tool-start") {
+    const node = TOOL_TO_NODE[event.tool];
+    if (node) {
+      setEdgeActive(`editor-${node}`, true);
+      setNodeStatus(node, "running", { peerId: event.peerId });
+      const child = NODE_TO_CHILD[node];
+      if (child) {
+        setEdgeActive(`${node}-${child}`, true);
+        setNodeStatus(child, "running");
+      }
+    }
+  } else if (event.type === "tool-end") {
+    const node = TOOL_TO_NODE[event.tool];
+    if (node) {
+      setEdgeActive(`editor-${node}`, false);
+      const child = NODE_TO_CHILD[node];
+      if (child) setEdgeActive(`${node}-${child}`, false);
+      if (event.ok) {
+        applyToolResult(node, event.result);
+      } else {
+        setNodeStatus(node, "error", { message: event.message ?? "error" });
+        if (child) setNodeStatus(child, "idle");
+      }
+    }
+  } else if (event.type === "result" && event.traceId) {
+    setNodeStatus("editor", "ok");
     upsertHistoryEntry({
       traceId: event.traceId,
       status: "ok",
@@ -48,6 +98,7 @@ events.addEventListener("message", (msg) => {
       endedAt: event.ts,
     });
   } else if (event.type === "error" && event.traceId) {
+    setNodeStatus("editor", "error", { message: event.message });
     upsertHistoryEntry({
       traceId: event.traceId,
       status: "error",
@@ -62,6 +113,155 @@ events.addEventListener("error", () => {
   // Browser auto-reconnects; nothing to do here.
 });
 
+// ---------- mesh visual ----------
+
+function nodeEl(name) {
+  return document.querySelector(`.node[data-node="${name}"]`);
+}
+
+function edgeEl(name) {
+  return document.querySelector(`.edge[data-edge="${name}"]`);
+}
+
+function resetMesh() {
+  for (const n of [
+    "editor",
+    "researcher",
+    "fact-checker",
+    "web-search",
+    "citation-db",
+  ]) {
+    setNodeStatus(n, "idle");
+  }
+  for (const e of [
+    "editor-researcher",
+    "editor-fact-checker",
+    "researcher-web-search",
+    "fact-checker-citation-db",
+  ]) {
+    setEdgeActive(e, false);
+  }
+}
+
+function setNodeStatus(name, status, meta = {}) {
+  const el = nodeEl(name);
+  if (!el) return;
+  el.classList.remove("idle", "running", "ok", "error");
+  el.classList.add(status);
+  if (meta.peerId) el.title = `peer id: ${meta.peerId}`;
+  if (status === "running") {
+    const body = el.querySelector(".node-body");
+    if (body && !body.querySelector(".node-output")) {
+      // Clear any prior output but keep the static summary line.
+      const summary = body.querySelector(".node-summary");
+      body.innerHTML = "";
+      if (summary) body.appendChild(summary);
+      const placeholder = document.createElement("div");
+      placeholder.className = "node-output running";
+      placeholder.textContent = "calling…";
+      body.appendChild(placeholder);
+    }
+  }
+  if (status === "idle") {
+    const output = el.querySelector(".node-output");
+    if (output) output.remove();
+  }
+  if (status === "error") {
+    const body = el.querySelector(".node-body");
+    if (body) {
+      const out = body.querySelector(".node-output") ?? document.createElement("div");
+      out.className = "node-output error";
+      out.textContent = meta.message ?? "error";
+      if (!out.parentNode) body.appendChild(out);
+    }
+  }
+}
+
+function setEdgeActive(name, active) {
+  const el = edgeEl(name);
+  if (!el) return;
+  el.classList.toggle("active", !!active);
+}
+
+function applyToolResult(node, result) {
+  if (node === "researcher") {
+    const summary = result?.summary ?? "(no summary)";
+    const sources = Array.isArray(result?.sources) ? result.sources : [];
+    setNodeOutput("researcher", "ok", summary, {
+      sub: `${sources.length} source${sources.length === 1 ? "" : "s"}`,
+    });
+    setNodeOutput(
+      "web-search",
+      "ok",
+      sources.length === 0
+        ? "no results"
+        : sources
+            .slice(0, 3)
+            .map((s) => `• ${s.title}`)
+            .join("\n"),
+      { sub: hostList(sources.map((s) => s.url)) },
+    );
+  } else if (node === "fact-checker") {
+    const status = result?.status ?? "(no verdict)";
+    const rationale = result?.rationale ?? "";
+    const sources = Array.isArray(result?.sources) ? result.sources : [];
+    setNodeOutput("fact-checker", "ok", `${status} — ${rationale}`, {
+      sub: `${sources.length} verdict${sources.length === 1 ? "" : "s"}`,
+    });
+    setNodeOutput(
+      "citation-db",
+      "ok",
+      sources.length === 0
+        ? "no verdicts"
+        : sources
+            .map((v) => `• ${v.domain}: ${v.reputability}`)
+            .join("\n"),
+      { sub: undefined },
+    );
+  }
+}
+
+function setNodeOutput(node, status, text, { sub } = {}) {
+  const el = nodeEl(node);
+  if (!el) return;
+  el.classList.remove("idle", "running", "ok", "error");
+  el.classList.add(status);
+  const body = el.querySelector(".node-body");
+  if (!body) return;
+  const summary = body.querySelector(".node-summary");
+  body.innerHTML = "";
+  if (summary) body.appendChild(summary);
+  const out = document.createElement("div");
+  out.className = "node-output " + status;
+  out.textContent = text;
+  body.appendChild(out);
+  if (sub) {
+    const subEl = document.createElement("div");
+    subEl.className = "node-sub";
+    subEl.textContent = sub;
+    body.appendChild(subEl);
+  }
+}
+
+function hostList(urls) {
+  const hosts = [];
+  const seen = new Set();
+  for (const u of urls) {
+    try {
+      const h = new URL(u).hostname;
+      if (!seen.has(h)) {
+        seen.add(h);
+        hosts.push(h);
+      }
+    } catch {
+      // ignore non-URLs
+    }
+  }
+  return hosts.slice(0, 3).join(", ");
+}
+
+// ---------- raw event log ----------
+
 function appendEvent(event) {
   const li = document.createElement("li");
   const t = document.createElement("span");
@@ -75,6 +275,11 @@ function appendEvent(event) {
   body.className = "body";
 
   switch (event.type) {
+    case "request-start":
+      k.classList.add("start");
+      k.textContent = "request ▶";
+      body.textContent = (event.prompt ?? "").slice(0, 80);
+      break;
     case "tool-start":
       k.classList.add("start");
       k.textContent = "tool ▶";
@@ -118,7 +323,7 @@ function appendEvent(event) {
     case "result":
       k.classList.add("end-ok");
       k.textContent = "result";
-      body.textContent = "(see right panel)";
+      body.textContent = "(see final answer)";
       break;
     case "error":
       k.classList.add("end-bad");
@@ -139,9 +344,6 @@ function formatTime(ts) {
   return d.toTimeString().slice(0, 8);
 }
 
-// Pulls a peer name + peer id off a span event. tool-start/end carry the
-// fields directly; span-* events expose them via attributes from the
-// editor's custom SpanProcessor.
 function spanPeer(span) {
   if (!span) return null;
   const attrs = span.attributes ?? {};
@@ -187,6 +389,8 @@ function formatInput(input) {
   }
 }
 
+// ---------- history ----------
+
 function replayHistory(entries) {
   historyEntries.clear();
   historyEl.innerHTML = "";
@@ -197,7 +401,6 @@ function replayHistory(entries) {
     historyEl.appendChild(empty);
     return;
   }
-  // Server sends newest-first; render in the same order.
   for (const e of entries) renderHistoryEntry(e, { append: true });
 }
 
@@ -239,7 +442,7 @@ function renderHistoryEntry(entry, { append }) {
 
   const link = document.createElement("a");
   link.className = "history-trace";
-  link.href = `${jaegerUiUrl}/trace/${entry.traceId}`;
+  link.href = `${jaegerUiUrl}trace/${entry.traceId}`;
   link.target = "_blank";
   link.rel = "noopener";
   link.textContent = `trace ${entry.traceId.slice(0, 8)}… →`;
@@ -284,6 +487,8 @@ function truncate(s, n) {
   return s.length > n ? s.slice(0, n - 1) + "…" : s;
 }
 
+// ---------- run button ----------
+
 runBtn.addEventListener("click", async () => {
   const prompt = promptEl.value.trim();
   if (!prompt) {
@@ -293,17 +498,24 @@ runBtn.addEventListener("click", async () => {
   runBtn.disabled = true;
   resultEl.hidden = true;
   resultEl.textContent = "";
+  rateWarnEl.hidden = true;
+  rateWarnEl.textContent = "";
   try {
     const res = await fetch("/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt }),
     });
-    const json = await res.json();
-    resultEl.hidden = false;
-    if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    if (res.status === 429 || res.status === 503) {
+      rateWarnEl.hidden = false;
+      rateWarnEl.textContent =
+        json.error ?? `rate limited (HTTP ${res.status})`;
+    } else if (!res.ok) {
+      resultEl.hidden = false;
       resultEl.textContent = `error: ${json.error ?? res.statusText}`;
     } else {
+      resultEl.hidden = false;
       resultEl.textContent = json.text ?? "(no text)";
     }
   } catch (err) {

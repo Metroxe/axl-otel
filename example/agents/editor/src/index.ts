@@ -252,11 +252,11 @@ Bun.serve({
       const ip = clientIp(req);
       const limit = checkAndRecordRateLimit(ip);
       if (!limit.ok) {
-        const headers: HeadersInit = { "Content-Type": "application/json" };
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
         if (limit.retryAfterSec) {
-          (headers as Record<string, string>)["Retry-After"] = String(
-            limit.retryAfterSec,
-          );
+          headers["Retry-After"] = String(limit.retryAfterSec);
         }
         return new Response(JSON.stringify({ error: limit.error }), {
           status: limit.status ?? 429,
