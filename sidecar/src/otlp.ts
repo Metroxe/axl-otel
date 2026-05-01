@@ -51,3 +51,13 @@ export function getStringAttribute(
   }
   return undefined;
 }
+
+export function countSpans(req: ExportTraceServiceRequest): number {
+  let n = 0;
+  for (const rs of req.resourceSpans ?? []) {
+    for (const ss of rs.scopeSpans ?? []) {
+      n += ss.spans?.length ?? 0;
+    }
+  }
+  return n;
+}

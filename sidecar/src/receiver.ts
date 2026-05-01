@@ -1,9 +1,14 @@
 import type { ExportTraceServiceRequest } from "./otlp.ts";
 
+export type TracesResult = {
+  rejectedSpans: number;
+  errorMessage?: string;
+};
+
 export type ReceiverOptions = {
   host: string;
   port: number;
-  onTraces: (req: ExportTraceServiceRequest) => Promise<void>;
+  onTraces: (req: ExportTraceServiceRequest) => Promise<TracesResult>;
 };
 
 // OTLP/HTTP receiver. Accepts JSON-encoded ExportTraceServiceRequest at
@@ -28,13 +33,21 @@ export function startReceiver(opts: ReceiverOptions) {
         } catch {
           return new Response("invalid JSON", { status: 400 });
         }
+        let result: TracesResult;
         try {
-          await opts.onTraces(payload);
+          result = await opts.onTraces(payload);
         } catch (err) {
           console.error("OTLP handler error:", err);
           return new Response("internal error", { status: 500 });
         }
-        return Response.json({ partialSuccess: {} });
+        const partialSuccess =
+          result.rejectedSpans > 0
+            ? {
+                rejectedSpans: result.rejectedSpans,
+                errorMessage: result.errorMessage ?? "",
+              }
+            : {};
+        return Response.json({ partialSuccess });
       }
 
       if (req.method === "GET" && url.pathname === "/healthz") {

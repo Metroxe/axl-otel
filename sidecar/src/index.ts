@@ -1,6 +1,6 @@
 import { Command, Option } from "commander";
 import { AxlClient, type RecvMessage } from "./axl.ts";
-import type { ExportTraceServiceRequest } from "./otlp.ts";
+import { countSpans, type ExportTraceServiceRequest } from "./otlp.ts";
 import { startPoller } from "./poller.ts";
 import { startReceiver } from "./receiver.ts";
 import { routeSpans } from "./router.ts";
@@ -30,8 +30,8 @@ async function run(opts: CliOptions): Promise<void> {
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
-      console.error(
-        `axl-otel: Jaeger forward failed: ${res.status} ${await res.text()}`,
+      throw new Error(
+        `Jaeger forward failed: ${res.status} ${await res.text()}`,
       );
     }
   }
@@ -41,12 +41,37 @@ async function run(opts: CliOptions): Promise<void> {
     port: opts.listenPort,
     async onTraces(req) {
       const { local, remote } = routeSpans(req, ourPeerId);
+      let rejectedSpans = 0;
+      const errors: string[] = [];
+
       const tasks: Promise<unknown>[] = [];
-      if (local) tasks.push(forwardToJaeger(local));
-      for (const [peerId, payload] of remote) {
-        tasks.push(axl.send(peerId, JSON.stringify(payload)));
+      if (local) {
+        const count = countSpans(local);
+        tasks.push(
+          forwardToJaeger(local).catch((err) => {
+            rejectedSpans += count;
+            const msg = `Jaeger forward dropped ${count} span(s): ${err}`;
+            errors.push(msg);
+            console.error(`axl-otel: ${msg}`);
+          }),
+        );
       }
-      await Promise.allSettled(tasks);
+      for (const [peerId, payload] of remote) {
+        const count = countSpans(payload);
+        tasks.push(
+          axl.send(peerId, JSON.stringify(payload)).catch((err) => {
+            rejectedSpans += count;
+            const msg = `AXL /send to ${peerId.slice(0, 12)}… dropped ${count} span(s): ${err}`;
+            errors.push(msg);
+            console.error(`axl-otel: ${msg}`);
+          }),
+        );
+      }
+      await Promise.all(tasks);
+      return {
+        rejectedSpans,
+        errorMessage: errors.length > 0 ? errors.join("; ") : undefined,
+      };
     },
   });
 
