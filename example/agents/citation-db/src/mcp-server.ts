@@ -90,6 +90,11 @@ export function startMcpServer(opts: {
             const tool = toolsByName.get(name)!;
             const toolSpan = opts.tracer.startSpan(`tool.${name}`, {
               kind: SpanKind.INTERNAL,
+              attributes: {
+                "demo.injected_failure": true,
+                "demo.note":
+                  "This is an example error thrown in citation-db for demonstrative purposes.",
+              },
             });
             try {
               const result = await context.with(
@@ -107,6 +112,7 @@ export function startMcpServer(opts: {
               });
             } catch (err) {
               const message = err instanceof Error ? err.message : String(err);
+              if (err instanceof Error) toolSpan.recordException(err);
               toolSpan.setStatus({ code: SpanStatusCode.ERROR, message });
               return jsonRpcError(body.id, -32000, message);
             } finally {

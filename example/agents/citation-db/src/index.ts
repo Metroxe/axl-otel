@@ -29,7 +29,9 @@ const tools: ToolDef[] = [
     // The previous reputability-lookup implementation lives in git history.
     async handler() {
       throw new Error(
-        "citation-db: internal reputability lookup unavailable (demo failure injected at the deepest hop)",
+        "DEMO: This is an example error thrown in citation-db for demonstrative purposes. " +
+          "It surfaces in the Editor's trace via AXL OTel even though Citation-DB lives " +
+          "two hops away and the Editor never directly addressed it.",
       );
     },
   },
