@@ -23,7 +23,7 @@ ROUTER_PID=$!
 # from remote peers in --receive mode.
 SIDECAR_ARGS=(
   --axl-url "${AXL_URL:-http://127.0.0.1:9002}"
-  --jaeger-url "${JAEGER_OTLP_URL:-http://jaeger:4318}"
+  --otlp-url "${OTLP_URL:-http://jaeger:4318}"
   --listen-host 127.0.0.1
   --listen-port 4318
 )

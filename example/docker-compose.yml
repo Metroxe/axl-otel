@@ -20,7 +20,7 @@ services:
     hostname: editor
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      JAEGER_OTLP_URL: http://jaeger:4318
+      OTLP_URL: http://jaeger:4318
       OTEL_SERVICE_NAME: editor
       SIDECAR_RECEIVE: "1"
     ports:
@@ -49,7 +49,7 @@ services:
       # Pointing local-forward at an unreachable port enforces that — if a
       # span ever fell into the "forward locally" branch, you'd see an
       # ECONNREFUSED in the logs instead of silent direct delivery.
-      JAEGER_OTLP_URL: http://127.0.0.1:65535
+      OTLP_URL: http://127.0.0.1:65535
     volumes:
       - ./keys/researcher.pem:/etc/axl/private.pem:ro
       - ./configs/researcher/node-config.json:/etc/axl/node-config.json:ro
@@ -69,7 +69,7 @@ services:
     hostname: web-search
     environment:
       OTEL_SERVICE_NAME: web-search
-      JAEGER_OTLP_URL: http://127.0.0.1:65535
+      OTLP_URL: http://127.0.0.1:65535
     volumes:
       - ./keys/web-search.pem:/etc/axl/private.pem:ro
       - ./configs/web-search/node-config.json:/etc/axl/node-config.json:ro
@@ -89,7 +89,7 @@ services:
     hostname: fact-checker
     environment:
       OTEL_SERVICE_NAME: fact-checker
-      JAEGER_OTLP_URL: http://127.0.0.1:65535
+      OTLP_URL: http://127.0.0.1:65535
     volumes:
       - ./keys/fact-checker.pem:/etc/axl/private.pem:ro
       - ./configs/fact-checker/node-config.json:/etc/axl/node-config.json:ro
@@ -109,7 +109,7 @@ services:
     hostname: citation-db
     environment:
       OTEL_SERVICE_NAME: citation-db
-      JAEGER_OTLP_URL: http://127.0.0.1:65535
+      OTLP_URL: http://127.0.0.1:65535
     volumes:
       - ./keys/citation-db.pem:/etc/axl/private.pem:ro
       - ./configs/citation-db/node-config.json:/etc/axl/node-config.json:ro

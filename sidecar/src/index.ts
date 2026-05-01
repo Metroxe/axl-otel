@@ -8,7 +8,7 @@ import { routeSpans } from "./router.ts";
 type CliOptions = {
   receive: boolean;
   axlUrl: string;
-  jaegerUrl: string;
+  otlpUrl: string;
   listenHost: string;
   listenPort: number;
   pollIntervalMs: number;
@@ -18,20 +18,20 @@ async function run(opts: CliOptions): Promise<void> {
   const axl = new AxlClient({ baseUrl: opts.axlUrl });
   const ourPeerId = await axl.getPeerId();
   console.log(
-    `axl-otel: peer ${ourPeerId.slice(0, 12)}…  axl=${opts.axlUrl}  jaeger=${opts.jaegerUrl}  receive=${opts.receive}`,
+    `axl-otel: peer ${ourPeerId.slice(0, 12)}…  axl=${opts.axlUrl}  otlp=${opts.otlpUrl}  receive=${opts.receive}`,
   );
 
-  async function forwardToJaeger(
+  async function forwardToBackend(
     payload: ExportTraceServiceRequest,
   ): Promise<void> {
-    const res = await fetch(`${opts.jaegerUrl}/v1/traces`, {
+    const res = await fetch(`${opts.otlpUrl}/v1/traces`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
       throw new Error(
-        `Jaeger forward failed: ${res.status} ${await res.text()}`,
+        `OTLP backend forward failed: ${res.status} ${await res.text()}`,
       );
     }
   }
@@ -48,9 +48,9 @@ async function run(opts: CliOptions): Promise<void> {
       if (local) {
         const count = countSpans(local);
         tasks.push(
-          forwardToJaeger(local).catch((err) => {
+          forwardToBackend(local).catch((err) => {
             rejectedSpans += count;
-            const msg = `Jaeger forward dropped ${count} span(s): ${err}`;
+            const msg = `OTLP backend forward dropped ${count} span(s): ${err}`;
             errors.push(msg);
             console.error(`axl-otel: ${msg}`);
           }),
@@ -83,7 +83,7 @@ async function run(opts: CliOptions): Promise<void> {
       async onMessage(msg) {
         const payload = extractOtlpPayload(msg);
         if (!payload) return;
-        await forwardToJaeger(payload);
+        await forwardToBackend(payload);
       },
     });
   }
@@ -125,7 +125,7 @@ program
   .version("0.1.0")
   .option(
     "--receive",
-    "Also poll AXL /recv and forward inbound spans to Jaeger",
+    "Also poll AXL /recv and forward inbound spans to the local OTLP backend",
     false,
   )
   .addOption(
@@ -134,8 +134,8 @@ program
       .default("http://localhost:9002"),
   )
   .addOption(
-    new Option("--jaeger-url <url>", "Local Jaeger OTLP HTTP base URL")
-      .env("JAEGER_OTLP_URL")
+    new Option("--otlp-url <url>", "Local OTLP backend HTTP base URL (Jaeger, Tempo, Datadog, etc.)")
+      .env("OTLP_URL")
       .default("http://localhost:4318"),
   )
   .addOption(

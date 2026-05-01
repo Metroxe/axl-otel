@@ -14,8 +14,8 @@ export type RouteResult = {
 };
 
 // Splits an inbound OTLP request into one envelope destined for the local
-// Jaeger (spans the originator wants to see locally) and one envelope per
-// remote peer that should receive its spans via AXL /send.
+// OTLP backend (spans the originator wants to see locally) and one envelope
+// per remote peer that should receive its spans via AXL /send.
 export function routeSpans(
   req: ExportTraceServiceRequest,
   ourPeerId: string,
