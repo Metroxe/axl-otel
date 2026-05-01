@@ -25,12 +25,27 @@ export function startReceiver(opts: ReceiverOptions) {
     async fetch(req) {
       const url = new URL(req.url);
 
+      if (url.pathname === "/v1/metrics" || url.pathname === "/v1/logs") {
+        return new Response(
+          `axl-otel only handles traces; ${url.pathname} is not implemented. Point metrics/logs exporters elsewhere or unset OTEL_EXPORTER_OTLP_ENDPOINT for those signals.`,
+          { status: 404 },
+        );
+      }
+
+      if (url.pathname === "/v1/traces" && req.method !== "POST") {
+        return new Response(`use POST /v1/traces (got ${req.method})`, {
+          status: 405,
+          headers: { Allow: "POST" },
+        });
+      }
+
       if (req.method === "POST" && url.pathname === "/v1/traces") {
         const contentType = req.headers.get("content-type") ?? "";
         if (!contentType.includes("application/json")) {
-          return new Response("only application/json is supported", {
-            status: 415,
-          });
+          return new Response(
+            `axl-otel accepts OTLP/HTTP JSON only; got Content-Type "${contentType || "(none)"}". If your exporter defaults to protobuf, set OTEL_EXPORTER_OTLP_PROTOCOL=http/json.`,
+            { status: 415 },
+          );
         }
         const declaredLength = Number(req.headers.get("content-length"));
         if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
@@ -73,7 +88,10 @@ export function startReceiver(opts: ReceiverOptions) {
         return new Response("ok");
       }
 
-      return new Response("not found", { status: 404 });
+      return new Response(
+        `not found. axl-otel exposes POST /v1/traces and GET /healthz.`,
+        { status: 404 },
+      );
     },
   });
 
