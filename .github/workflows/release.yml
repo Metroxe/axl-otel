@@ -3,6 +3,12 @@ name: Release
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to (re-)build artifacts for, e.g. v0.1.0'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -10,10 +16,10 @@ permissions:
 
 jobs:
   release-please:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     outputs:
       release_created: ${{ steps.release.outputs.releases_created }}
-      tag_name: ${{ steps.release.outputs['.--tag_name'] }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
@@ -23,12 +29,30 @@ jobs:
 
   build-and-upload:
     needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
+    if: |
+      always() && (
+        github.event_name == 'workflow_dispatch' ||
+        needs.release-please.outputs.release_created == 'true'
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Determine tag
+        id: tag
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          if [ -n "$INPUT_TAG" ]; then
+            echo "name=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+          else
+            V=$(jq -r '."."' .release-please-manifest.json)
+            echo "name=v${V}" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -54,7 +78,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ needs.release-please.outputs.tag_name }}" \
+          gh release upload "${{ steps.tag.outputs.name }}" \
             sidecar/axl-otel-linux-x64 \
             sidecar/axl-otel-linux-arm64 \
             sidecar/axl-otel-darwin-arm64 \
@@ -62,13 +86,31 @@ jobs:
 
   docker-publish:
     needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
+    if: |
+      always() && (
+        github.event_name == 'workflow_dispatch' ||
+        needs.release-please.outputs.release_created == 'true'
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Determine version
+        id: version
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          if [ -n "$INPUT_TAG" ]; then
+            V="${INPUT_TAG#v}"
+          else
+            V=$(jq -r '."."' .release-please-manifest.json)
+          fi
+          echo "value=${V}" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-qemu-action@v3
 
@@ -79,12 +121,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Compute version
-        id: version
-        env:
-          TAG: ${{ needs.release-please.outputs.tag_name }}
-        run: echo "value=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Docker metadata
         id: meta
