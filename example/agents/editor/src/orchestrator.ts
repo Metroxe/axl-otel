@@ -77,9 +77,17 @@ export type OrchestrateOptions = {
   tracer: Tracer;
   bus: EventBus;
   anthropic: Anthropic;
+  onWorkflowStart?: (traceId: string) => void;
 };
 
-export async function orchestrate(opts: OrchestrateOptions): Promise<string> {
+export type OrchestrateResult = {
+  text: string;
+  traceId: string;
+};
+
+export async function orchestrate(
+  opts: OrchestrateOptions,
+): Promise<OrchestrateResult> {
   const { prompt, ourPeerId, axlUrl, tracer, bus, anthropic } = opts;
 
   // Set the originator peer ID as a baggage entry. Every span emitted under
@@ -95,6 +103,8 @@ export async function orchestrate(opts: OrchestrateOptions): Promise<string> {
       kind: SpanKind.INTERNAL,
       attributes: { "editor.prompt.length": prompt.length },
     });
+    const traceId = workflowSpan.spanContext().traceId;
+    opts.onWorkflowStart?.(traceId);
 
     try {
       return await context.with(
@@ -163,14 +173,14 @@ export async function orchestrate(opts: OrchestrateOptions): Promise<string> {
             .join("\n")
             .trim();
 
-          bus.publish({ type: "result", text: finalText });
-          return finalText;
+          bus.publish({ type: "result", text: finalText, traceId });
+          return { text: finalText, traceId };
         },
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       workflowSpan.setStatus({ code: SpanStatusCode.ERROR, message });
-      bus.publish({ type: "error", message });
+      bus.publish({ type: "error", message, traceId });
       throw err;
     } finally {
       workflowSpan.end();
@@ -232,6 +242,7 @@ async function runEditorTool(
           peer: route.peer,
           peerId,
           ok: true,
+          result,
         });
         return JSON.stringify(result);
       },
