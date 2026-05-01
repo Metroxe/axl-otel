@@ -28,14 +28,18 @@
           id="prompt"
           rows="4"
           placeholder="e.g. Explain how OpenTelemetry baggage propagates over MCP, and verify the claim against reputable sources."
-        ></textarea>
+        >Fact-check this claim and cite sources: "AXL routes traffic over Yggdrasil." Use https://docs.gensyn.ai/axl and https://demo-fail.example.com/source as candidate citations.</textarea>
         <button id="run">Run workflow</button>
-        <div id="result" class="result" hidden></div>
       </section>
 
       <section class="activity">
         <h2>Mesh activity</h2>
         <ol id="events"></ol>
+      </section>
+
+      <section class="output">
+        <h2>Output</h2>
+        <div id="result" class="result" hidden></div>
       </section>
     </main>
 
