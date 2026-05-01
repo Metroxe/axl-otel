@@ -7,7 +7,7 @@
     to the originator. No central collector, no shared infra.
   </p>
 
-  <img src="assets/cover.gif" alt="A request fans out across an AXL mesh and every span comes back home" width="640" />
+  <img src="assets/cover.gif" alt="A request fans out across an AXL mesh and every span comes back home" width="720" />
 
   <p>
     <a href="SPEC.md">Spec</a> &middot;
@@ -20,7 +20,7 @@
 
 ## The problem
 
-<img src="assets/blind.gif" alt="In AXL's distributed mesh, errors are untraceable" width="100%" />
+<img src="assets/blind-hires.gif" alt="In AXL's distributed mesh, errors are untraceable" width="100%" />
 
 [AXL](https://docs.gensyn.ai/tech/agent-exchange-layer) is peer-to-peer.
 You address peers by ed25519 public key, and your peers address peers
@@ -34,7 +34,7 @@ OpenTelemetry already solves distributed tracing in every major
 language. It just doesn't ship a transport that fits AXL's encrypted,
 identity-addressed mesh. **`axl-otel` is that transport.**
 
-<img src="assets/dropin.gif" alt="axl-otel is a drop-in sidecar with zero code changes" width="100%" />
+<img src="assets/dropin-hires.gif" alt="axl-otel is a drop-in sidecar with zero code changes" width="100%" />
 
 Drop a sidecar next to your agent. Point your existing OpenTelemetry
 SDK at it via `OTEL_EXPORTER_OTLP_ENDPOINT`. Your agent code stays
@@ -42,7 +42,7 @@ untouched. No axl-otel library, no imports, no wrappers.
 
 ### Works with any agent framework
 
-<img src="assets/anylang.gif" alt="Works with any agent framework: LangChain, Claude SDK, OpenAI, CrewAI, AutoGen, and more" width="100%" />
+<img src="assets/anylang-hires.gif" alt="Works with any agent framework: LangChain, Claude SDK, OpenAI, CrewAI, AutoGen, and more" width="100%" />
 
 LangChain, OpenClaw, Claude Agent SDK, OpenAI Agents, CrewAI, AutoGen:
 they all emit OpenTelemetry spans. `axl-otel` accepts standard OTLP.
@@ -51,7 +51,7 @@ whatever transport (MCP, A2A, plain HTTP, gRPC).
 
 ### Ships to any OpenTelemetry backend
 
-<img src="assets/backends.gif" alt="Ships to any OpenTelemetry backend: Jaeger, Grafana, Datadog, New Relic, Splunk, Sentry" width="100%" />
+<img src="assets/backends-hires.gif" alt="Ships to any OpenTelemetry backend: Jaeger, Grafana, Datadog, New Relic, Splunk, Sentry" width="100%" />
 
 Once spans land at the originator's sidecar, they're forwarded as plain
 OTLP to whatever backend you choose: Jaeger, Grafana Tempo, Datadog,
@@ -62,7 +62,7 @@ No vendor lock-in.
 
 ### Every node in your call graph
 
-<img src="assets/topology.gif" alt="The entire architecture, exposed. Every hop and dependency becomes visible" width="100%" />
+<img src="assets/topology-hires.gif" alt="The entire architecture, exposed. Every hop and dependency becomes visible" width="100%" />
 
 Peers, hops, and dependencies you've never directly addressed all
 become visible. The complete shape of your distributed call lights up,
@@ -70,7 +70,7 @@ not just your immediate neighbors.
 
 ### The full callstack, end to end
 
-<img src="assets/trace.gif" alt="Hierarchical trace with stack traces for errors" width="100%" />
+<img src="assets/trace-hires.gif" alt="Hierarchical trace with stack traces for errors" width="100%" />
 
 Every agent's span comes home. Nested calls, even ones that crossed
 peers you never directly addressed, assemble into a single hierarchical
