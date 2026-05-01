@@ -1,0 +1,27 @@
+# Demo override: simulate a deployment without AXL OTel by pointing each
+# non-editor agent's OTLP exporter at an unreachable port. Their span
+# exports fail with ECONNREFUSED, so nothing reaches the local sidecar
+# and nothing routes home through AXL. The editor still creates its own
+# local spans (so Jaeger shows a partial trace stopping at the editor)
+# and still surfaces Citation-DB's failure as a generic error in the
+# response panel — which is exactly what the "broken" half of the video
+# is meant to demonstrate.
+#
+# Use:
+#   docker compose -f docker-compose.yml -f docker-compose.broken.yml up -d
+# To restore the normal (fully-instrumented) deployment:
+#   docker compose up -d
+
+services:
+  researcher:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://127.0.0.1:65535
+  web-search:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://127.0.0.1:65535
+  fact-checker:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://127.0.0.1:65535
+  citation-db:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://127.0.0.1:65535
