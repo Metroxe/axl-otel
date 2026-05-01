@@ -5,6 +5,11 @@ export type TracesResult = {
   errorMessage?: string;
 };
 
+// 4 MiB is the conservative OTLP/HTTP body cap most collectors use. Larger
+// payloads are almost certainly a misconfigured exporter (no batching, huge
+// attribute values, etc.) — better to 413 fast than to OOM the sidecar.
+export const MAX_BODY_BYTES = 4 * 1024 * 1024;
+
 export type ReceiverOptions = {
   host: string;
   port: number;
@@ -27,9 +32,23 @@ export function startReceiver(opts: ReceiverOptions) {
             status: 415,
           });
         }
+        const declaredLength = Number(req.headers.get("content-length"));
+        if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+          return new Response(
+            `request body exceeds ${MAX_BODY_BYTES} bytes`,
+            { status: 413 },
+          );
+        }
+        const buf = await req.arrayBuffer();
+        if (buf.byteLength > MAX_BODY_BYTES) {
+          return new Response(
+            `request body exceeds ${MAX_BODY_BYTES} bytes`,
+            { status: 413 },
+          );
+        }
         let payload: ExportTraceServiceRequest;
         try {
-          payload = (await req.json()) as ExportTraceServiceRequest;
+          payload = JSON.parse(new TextDecoder().decode(buf)) as ExportTraceServiceRequest;
         } catch {
           return new Response("invalid JSON", { status: 400 });
         }
