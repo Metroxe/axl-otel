@@ -249,6 +249,20 @@ Bun.serve({
           { status: 400 },
         );
       }
+      const ip = clientIp(req);
+      const limit = checkAndRecordRateLimit(ip);
+      if (!limit.ok) {
+        const headers: HeadersInit = { "Content-Type": "application/json" };
+        if (limit.retryAfterSec) {
+          (headers as Record<string, string>)["Retry-After"] = String(
+            limit.retryAfterSec,
+          );
+        }
+        return new Response(JSON.stringify({ error: limit.error }), {
+          status: limit.status ?? 429,
+          headers,
+        });
+      }
       const startedAt = Date.now();
       let runTraceId: string | undefined;
       try {
