@@ -33,6 +33,16 @@ console.log(
   `editor: AXL ready  peer=${ourPeerId.slice(0, 12)}…  serving on :${PORT}`,
 );
 
+// Emit a one-shot startup span so the editor service shows up in the local
+// Jaeger immediately, without waiting for the first page load. Jaeger only
+// learns a service exists once it's seen a span tagged with that name.
+tracer
+  .startSpan("editor.startup", {
+    kind: SpanKind.INTERNAL,
+    attributes: { "peer.id": ourPeerId },
+  })
+  .end();
+
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
