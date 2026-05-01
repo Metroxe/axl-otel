@@ -36,7 +36,7 @@ async function run(opts: CliOptions): Promise<void> {
     }
   }
 
-  startReceiver({
+  const server = startReceiver({
     host: opts.listenHost,
     port: opts.listenPort,
     async onTraces(req) {
@@ -50,8 +50,9 @@ async function run(opts: CliOptions): Promise<void> {
     },
   });
 
+  let stopPoller: (() => void) | null = null;
   if (opts.receive) {
-    startPoller({
+    stopPoller = startPoller({
       axl,
       intervalMs: opts.pollIntervalMs,
       async onMessage(msg) {
@@ -61,6 +62,19 @@ async function run(opts: CliOptions): Promise<void> {
       },
     });
   }
+
+  let shuttingDown = false;
+  const shutdown = async (signal: NodeJS.Signals) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`axl-otel: ${signal} received, shutting down`);
+    stopPoller?.();
+    // server.stop(false) lets in-flight requests drain.
+    await server.stop(false);
+    process.exit(0);
+  };
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
 }
 
 // The sidecar's `/send` side encodes ExportTraceServiceRequest as JSON, so
