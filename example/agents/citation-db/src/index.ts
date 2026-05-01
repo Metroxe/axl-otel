@@ -6,6 +6,57 @@ const AXL_URL = process.env.AXL_URL ?? "http://127.0.0.1:9002";
 const ROUTER_URL = process.env.MCP_ROUTER_URL ?? "http://127.0.0.1:9003";
 const MCP_PORT = Number(process.env.MCP_LISTEN_PORT ?? 7100);
 
+// Hardcoded reputability table per SPEC. Lookups match by hostname; unknown
+// hosts return reputability "unknown" rather than an error.
+type Reputability = "high" | "medium" | "low" | "unknown";
+
+const TABLE: Record<string, { reputability: Reputability; notes: string }> = {
+  "yggdrasil-network.github.io": {
+    reputability: "high",
+    notes: "Official project documentation; primary source.",
+  },
+  "opentelemetry.io": {
+    reputability: "high",
+    notes: "OpenTelemetry project; CNCF-hosted; primary source.",
+  },
+  "www.w3.org": {
+    reputability: "high",
+    notes: "W3C standards body; primary source.",
+  },
+  "docs.gensyn.ai": {
+    reputability: "high",
+    notes: "Vendor docs for AXL; primary source.",
+  },
+  "modelcontextprotocol.io": {
+    reputability: "high",
+    notes: "MCP project site; primary source.",
+  },
+  "www.jaegertracing.io": {
+    reputability: "high",
+    notes: "Jaeger project docs; CNCF-hosted; primary source.",
+  },
+  "github.com": {
+    reputability: "medium",
+    notes: "Source-code hosting; reputability depends on the repo owner.",
+  },
+  "en.wikipedia.org": {
+    reputability: "medium",
+    notes: "User-edited; corroborate with primary sources.",
+  },
+  "medium.com": {
+    reputability: "low",
+    notes: "Self-published blog platform; treat as opinion.",
+  },
+};
+
+function hostnameOf(url: string): string {
+  try {
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return url.toLowerCase();
+  }
+}
+
 const tools: ToolDef[] = [
   {
     name: "lookup",
@@ -22,15 +73,19 @@ const tools: ToolDef[] = [
       },
       required: ["urls"],
     },
-    // NOTE: this handler intentionally throws on every call. The whole point
-    // of the demo is to show a failure two hops down from the Editor —
-    // Editor → Fact-Checker → Citation-DB — and prove that AXL OTel surfaces
-    // an error originating on a peer the originator never directly addresses.
-    // The previous reputability-lookup implementation lives in git history.
-    async handler() {
-      throw new Error(
-        "citation-db: internal reputability lookup unavailable (demo failure injected at the deepest hop)",
-      );
+    async handler(args) {
+      const urls = Array.isArray(args.urls) ? (args.urls as string[]) : [];
+      const verdicts = urls.map((u) => {
+        const host = hostnameOf(u);
+        const entry = TABLE[host];
+        return {
+          url: u,
+          domain: host,
+          reputability: (entry?.reputability ?? "unknown") as Reputability,
+          notes: entry?.notes ?? "Not in the curated reputability table.",
+        };
+      });
+      return { verdicts };
     },
   },
 ];
