@@ -65,9 +65,15 @@
       name="twitter:description"
       content="A drop-in OTLP sidecar. Every span from every agent flows back to the originator."
     />
+    <!--
+      Twitter is inconsistent about animated GIFs in summary_large_image
+      cards (sometimes static-frame, sometimes plays, sometimes rejects).
+      Pin twitter:image to the PNG so the card is predictable; Discord /
+      Slack / Telegram / Facebook still get the animated og:image above.
+    -->
     <meta
       name="twitter:image"
-      content="https://axl-otel-demo.boilerroom.tech/og-cover.gif"
+      content="https://axl-otel-demo.boilerroom.tech/og-cover.png"
     />
     <meta
       name="twitter:image:alt"
