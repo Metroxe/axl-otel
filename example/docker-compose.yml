@@ -1,6 +1,14 @@
+# All services pinned to linux/arm64. Bun's amd64 build is dramatically
+# more memory-hungry on Proxmox/KVM CPUs that don't expose AVX (an idle
+# Bun process on the demo VPS uses ~440 MiB on amd64 vs ~9 MiB on arm64
+# native Mac, and ~80 MiB on the same VPS via QEMU emulation). Forcing
+# arm64 lets the demo fit in <1 GiB total — slower per-request under
+# emulation, but irrelevant for this workload. Apple-Silicon Macs also
+# run these natively without emulation, which is a happy bonus.
 services:
   jaeger:
     image: jaegertracing/all-in-one:latest
+    platform: linux/arm64
     container_name: jaeger
     hostname: jaeger
     environment:
@@ -19,6 +27,8 @@ services:
     build:
       context: ..
       dockerfile: example/agents/editor/Dockerfile
+      platforms: ["linux/arm64"]
+    platform: linux/arm64
     image: axl-otel-editor
     container_name: editor
     hostname: editor
@@ -63,6 +73,8 @@ services:
     build:
       context: ..
       dockerfile: example/agents/researcher/Dockerfile
+      platforms: ["linux/arm64"]
+    platform: linux/arm64
     image: axl-otel-researcher
     container_name: researcher
     hostname: researcher
@@ -89,6 +101,8 @@ services:
     build:
       context: ..
       dockerfile: example/agents/web-search/Dockerfile
+      platforms: ["linux/arm64"]
+    platform: linux/arm64
     image: axl-otel-web-search
     container_name: web-search
     hostname: web-search
@@ -110,6 +124,8 @@ services:
     build:
       context: ..
       dockerfile: example/agents/fact-checker/Dockerfile
+      platforms: ["linux/arm64"]
+    platform: linux/arm64
     image: axl-otel-fact-checker
     container_name: fact-checker
     hostname: fact-checker
@@ -131,6 +147,8 @@ services:
     build:
       context: ..
       dockerfile: example/agents/citation-db/Dockerfile
+      platforms: ["linux/arm64"]
+    platform: linux/arm64
     image: axl-otel-citation-db
     container_name: citation-db
     hostname: citation-db
