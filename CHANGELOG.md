@@ -1,5 +1,63 @@
 # Changelog
 
+## [0.2.0](https://github.com/Metroxe/axl-otel/compare/v0.1.0...v0.2.0) (2026-05-03)
+
+
+### Features
+
+* **editor:** add request history with trace links ([d413626](https://github.com/Metroxe/axl-otel/commit/d4136262c78e31065553abbfbcf99b7ff4896dab))
+* **editor:** tighten rate limit and add IP whitelist ([4f2668f](https://github.com/Metroxe/axl-otel/commit/4f2668f34e1b278864b128a9aeb17ea699b47763))
+* **editor:** wire rate limiter into POST /run ([072c0f9](https://github.com/Metroxe/axl-otel/commit/072c0f96b8dbc04f880b6ed022d4789e66ccbc62))
+* **example:** add broken-mode compose override ([d3a3daf](https://github.com/Metroxe/axl-otel/commit/d3a3daf443703e136e32401de5fdb2f62f0b8802))
+* **example:** add favicons and animated og:image for editor ([0991151](https://github.com/Metroxe/axl-otel/commit/099115198b6f954222a57fd33b8b1185b7a36df1))
+* **example:** add run timeouts, streaming Claude spans, and trace-ready polling ([63b92f5](https://github.com/Metroxe/axl-otel/commit/63b92f5120a3005960391634f6174146e6c372b0))
+* **example:** visualise mesh on Editor page with per-node outputs ([fb1397d](https://github.com/Metroxe/axl-otel/commit/fb1397d596c5cdfdae62630eb99c06435d52973a))
+
+
+### Bug Fixes
+
+* **ci:** derive tag from manifest instead of action output ([2db49b2](https://github.com/Metroxe/axl-otel/commit/2db49b2d7ced4853da96af0a7a7186dcb8773434))
+* **example:** let leaf peer error messages win over JSON-RPC wraps ([40e9b81](https://github.com/Metroxe/axl-otel/commit/40e9b81feb3a472eefbf77e867fa2af0cc92642c))
+* **example:** pin twitter:image to PNG for predictable card rendering ([888f9a9](https://github.com/Metroxe/axl-otel/commit/888f9a99bf481f2692f23d385e359b5023b14446))
+
+
+### Performance
+
+* **example:** compile sidecar + agent with explicit baseline target ([51ce9b9](https://github.com/Metroxe/axl-otel/commit/51ce9b99c1c21bfab0d31bc6ab643f0e6042b054))
+* **example:** compile sidecar to native binary in agent images ([4e8cf36](https://github.com/Metroxe/axl-otel/commit/4e8cf36b51c2b3d37fd49606e8d71eeebba71462))
+* **example:** run sidecar + agent bun procs with --smol ([f9d9c2e](https://github.com/Metroxe/axl-otel/commit/f9d9c2e15ded467f7a8a33ba543d76e5e2ba6eb4))
+
+
+### Refactors
+
+* **sidecar:** rename --jaeger-url to --otlp-url ([bba4015](https://github.com/Metroxe/axl-otel/commit/bba40158c025c3709bb41a16650bfdf90653ee3e))
+
+
+### Documentation
+
+* add project README ([540fe5d](https://github.com/Metroxe/axl-otel/commit/540fe5d97b04923fed4d37cec11a66dd764493c6))
+* add README assets ([a4e6b3a](https://github.com/Metroxe/axl-otel/commit/a4e6b3a6a0e394f5e50d976d9f83388e3ee948aa))
+* **assets:** add static PNG panel alternatives for submission ([79cf1ca](https://github.com/Metroxe/axl-otel/commit/79cf1ca23b5a34b44a50a90349d69e78fb308c39))
+* **example:** explain demo intent and surface intentional errors ([a3522ba](https://github.com/Metroxe/axl-otel/commit/a3522bae2d3a574214e74adbe32994c78fed36f1))
+* **example:** lead the About modal with what axl-otel actually is ([e19876e](https://github.com/Metroxe/axl-otel/commit/e19876ecdd4ae96adaea4026d85e25c3c64ba7c6))
+* **example:** rewrite the demo's About modal to teach what's running ([d2c9337](https://github.com/Metroxe/axl-otel/commit/d2c9337705cc584d39ea1624d474840176abfff2))
+* link README demo to hosted instance ([72c7e15](https://github.com/Metroxe/axl-otel/commit/72c7e1557c566623e75787672b7fdbacc86b0c1f))
+* **readme:** point cover image at cover-hires.gif ([7d4072f](https://github.com/Metroxe/axl-otel/commit/7d4072f396bed5c7870a0d7c20f9ee3c324bafd1))
+* **readme:** use high-resolution gif assets ([f81c4df](https://github.com/Metroxe/axl-otel/commit/f81c4dfea10ecb1a790c6ed4306c0e9e5b6f44ef))
+
+
+### Build
+
+* **example:** pin all images to linux/arm64 ([5f356d3](https://github.com/Metroxe/axl-otel/commit/5f356d3dd46f0b3da6947dc975816f88f0f523ee))
+
+
+### Chores
+
+* **assets:** split assets into logo/ and panels/ subfolders ([09f13fc](https://github.com/Metroxe/axl-otel/commit/09f13fc1553a370b341e522f09c1f27a123b5ae3))
+* drop release-as override now that v0.1.0 has shipped ([a2380e0](https://github.com/Metroxe/axl-otel/commit/a2380e0bcebff981be92adf2ae889a01765860e8))
+* ignore Claude Code local skill and scheduler artifacts ([bc77c8d](https://github.com/Metroxe/axl-otel/commit/bc77c8db1abe51db894743adac8e1d73fb84251c))
+* **sidecar:** log span counts on inbound callback delivery ([4e58409](https://github.com/Metroxe/axl-otel/commit/4e584091502ce2c2d9f75174d06b7996b915db07))
+
 ## 0.1.0 (2026-05-01)
 
 
