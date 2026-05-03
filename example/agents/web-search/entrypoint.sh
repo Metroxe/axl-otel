@@ -33,7 +33,7 @@ if [[ -z "${SIDECAR_DISABLED:-}" ]]; then
     SIDECAR_ARGS+=(--receive)
   fi
   cd /sidecar
-  ./sidecar "${SIDECAR_ARGS[@]}" &
+  bun run src/index.ts "${SIDECAR_ARGS[@]}" &
   SIDECAR_PID=$!
 else
   echo "entrypoint: SIDECAR_DISABLED set — observability transport off" >&2
@@ -41,7 +41,7 @@ fi
 
 # 4. Agent code — registers an MCP server with the router and serves tools.
 cd /app
-./agent &
+bun run src/index.ts &
 APP_PID=$!
 
 shutdown() {

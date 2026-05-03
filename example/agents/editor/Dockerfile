@@ -24,23 +24,14 @@ WORKDIR /sidecar
 COPY sidecar/package.json sidecar/bun.lock ./
 RUN bun install --frozen-lockfile
 COPY sidecar/src ./src
-# Compile the sidecar into a single native binary at build time. Running it
-# as a binary (vs `bun run src/index.ts` at startup) cuts resident memory
-# from ~2 GiB to ~50-100 MiB per container — material on the demo VPS where
-# 5 agent containers each spawn a sidecar.
-RUN bun build --compile --minify src/index.ts --outfile sidecar
 
 WORKDIR /app
 COPY example/agents/editor/package.json ./
 RUN bun install
 COPY example/agents/editor/src ./src
 COPY example/agents/editor/public ./public
-RUN bun build --compile --minify src/index.ts --outfile agent
 COPY example/agents/editor/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
-# Compiled binary can't resolve `import.meta.url` to a real on-disk path,
-# so pin PUBLIC_DIR to where the public dir was COPY'd above.
-ENV PUBLIC_DIR=/app/public
 
 ENV AXL_URL=http://127.0.0.1:9002 \
     AXL_CONFIG=/etc/axl/node-config.json \
