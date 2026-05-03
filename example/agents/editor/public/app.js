@@ -31,6 +31,12 @@ const pendingChildReveals = new Map();
 // workflow completes, so the chain origin → propagator → editor stays
 // visible end-to-end. Reset on each request-start.
 let runHadToolError = false;
+// Set when a leaf peer's error span arrives via the sidecar's /recv
+// fan-out — the verbatim error message from the peer that originated the
+// failure. Used to override the editor/fact-checker cards' generic
+// JSON-RPC message so OTel-delivered detail "wins" over the wrapped
+// message. Stays null in broken-path because no leaf span lands.
+let leafErrorMessage = null;
 // Number of in-flight Claude calls (tracked via the SSE span-start/span-end
 // events we publish from the editor's `claude.messages.create` spans). Used
 // to drive the editor's "writing report…" activity indicator so the user
@@ -66,6 +72,21 @@ const KNOWN_NODES = new Set([
   "web-search",
   "citation-db",
 ]);
+// Leaf peers — the deepest hops in this demo's mesh. When one of them
+// reports an error span via the sidecar's /recv fan-out, we walk back
+// up the chain and replace the upstream peers' (and editor's) generic
+// JSON-RPC error with the rich message that came home over OTel. With
+// the sidecar disabled no leaf span arrives, so the generic message wins.
+const LEAF_TO_CHAIN = {
+  "citation-db": ["fact-checker", "editor"],
+  "web-search": ["researcher", "editor"],
+};
+// Flat set of every node that appears as an ancestor in any leaf chain —
+// used to recognise "this peer's own span just landed and would otherwise
+// clobber the rich leaf message we already propagated to it."
+const LEAF_CHAIN_ANCESTORS = new Set(
+  Object.values(LEAF_TO_CHAIN).flat(),
+);
 
 const events = new EventSource("/events");
 
@@ -99,6 +120,7 @@ events.addEventListener("message", (msg) => {
     for (const handle of pendingChildReveals.values()) clearTimeout(handle);
     pendingChildReveals.clear();
     runHadToolError = false;
+    leafErrorMessage = null;
     claudeActiveCount = 0;
     streamingTurn = -1;
     streamingBuffer = "";
@@ -165,12 +187,12 @@ events.addEventListener("message", (msg) => {
       } else {
         runHadToolError = true;
         refreshEditorActivity();
-        const cleaned = cleanErrorMessage(event.message ?? "error");
-        // Only mark the directly-called peer and the editor. A downstream
-        // peer's failure can only be claimed if its own error span actually
-        // arrived — that's handled in the span-end branch below.
-        setNodeStatus(node, "error", { message: cleaned });
-        setNodeStatus("editor", "error", { message: cleaned });
+        // Prefer the rich message OTel surfaced from the leaf peer if it
+        // already arrived; fall back to the wrapped JSON-RPC message.
+        const message =
+          leafErrorMessage ?? cleanErrorMessage(event.message ?? "error");
+        setNodeStatus(node, "error", { message });
+        setNodeStatus("editor", "error", { message });
       }
     }
   } else if (event.type === "result" && event.traceId) {
@@ -254,7 +276,28 @@ events.addEventListener("message", (msg) => {
         const msg = cleanErrorMessage(
           event.span.statusMessage ?? "error",
         );
-        setNodeStatus(peerName, "error", { message: msg });
+        const chain = LEAF_TO_CHAIN[peerName];
+        if (chain) {
+          // Leaf peer (web-search / citation-db): this is the root cause.
+          // Stamp it on the leaf and propagate up through every ancestor
+          // so the chain editor → propagator → leaf all show the same
+          // OTel-delivered message.
+          leafErrorMessage = msg;
+          setNodeStatus(peerName, "error", { message: msg });
+          for (const ancestor of chain) {
+            setNodeStatus(ancestor, "error", { message: msg });
+          }
+        } else if (
+          leafErrorMessage &&
+          LEAF_CHAIN_ANCESTORS.has(peerName)
+        ) {
+          // Intermediate peer's own span landed (e.g. fact-checker's wrap
+          // of citation-db's error). A leaf already gave us the root cause
+          // upstream — don't let the wrap clobber it.
+          setNodeStatus(peerName, "error", { message: leafErrorMessage });
+        } else {
+          setNodeStatus(peerName, "error", { message: msg });
+        }
       }
     }
   }
