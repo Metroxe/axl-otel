@@ -33,7 +33,7 @@ if [[ -z "${SIDECAR_DISABLED:-}" ]]; then
     SIDECAR_ARGS+=(--receive)
   fi
   cd /sidecar
-  bun --smol run src/index.ts "${SIDECAR_ARGS[@]}" &
+  ./sidecar "${SIDECAR_ARGS[@]}" &
   SIDECAR_PID=$!
 else
   echo "entrypoint: SIDECAR_DISABLED set — observability transport off" >&2

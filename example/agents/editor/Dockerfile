@@ -24,6 +24,11 @@ WORKDIR /sidecar
 COPY sidecar/package.json sidecar/bun.lock ./
 RUN bun install --frozen-lockfile
 COPY sidecar/src ./src
+# Compile the sidecar into a single native binary at build time. Running it
+# as a binary (vs `bun run src/index.ts` at startup) cuts resident memory
+# from ~2 GiB to ~50-100 MiB per container — material on the demo VPS where
+# 5 agent containers each spawn a sidecar.
+RUN bun build --compile --minify src/index.ts --outfile sidecar
 
 WORKDIR /app
 COPY example/agents/editor/package.json ./

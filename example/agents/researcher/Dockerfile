@@ -24,6 +24,7 @@ WORKDIR /sidecar
 COPY sidecar/package.json sidecar/bun.lock ./
 RUN bun install --frozen-lockfile
 COPY sidecar/src ./src
+RUN bun build --compile --minify src/index.ts --outfile sidecar
 
 WORKDIR /app
 COPY example/agents/researcher/package.json ./
