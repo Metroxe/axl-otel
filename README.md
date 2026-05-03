@@ -3,7 +3,7 @@
 
   <p><strong>Distributed tracing for AXL agent meshes.</strong></p>
   <p>
-    A drop-in OTLP sidecar. Every span from every agent flows back
+    Drop-in OTLP sidecar. Every span from every agent flows back
     to the originator. No central collector, no shared infra.
   </p>
 
@@ -23,40 +23,41 @@
 <img src="assets/panels/blind-hires.gif" alt="In AXL's distributed mesh, errors are untraceable" width="100%" />
 
 [AXL](https://docs.gensyn.ai/tech/agent-exchange-layer) is peer-to-peer.
-You address peers by ed25519 public key, and your peers address peers
-*you* don't know. Three hops in, an agent crashes, and there's nothing
-in your logs. No stack, no trace, no path back. The deeper your call
-chain runs, the darker it gets.
+You address peers by ed25519 public key, your peers address peers
+*you've* never heard of, and three hops in somebody's agent crashes.
+Now what. There's nothing in your logs. No stack, no trace, no path
+back. The deeper the call chain runs, the darker it gets.
 
 ## The solution
 
-OpenTelemetry already solves distributed tracing in every major
-language. It just doesn't ship a transport that fits AXL's encrypted,
-identity-addressed mesh. **`axl-otel` is that transport.**
+OpenTelemetry already solved distributed tracing. Every major language
+has SDKs, every backend takes OTLP, every agent framework already
+emits spans. The missing piece is a transport that fits AXL's
+encrypted, identity-addressed mesh. **That's `axl-otel`.**
 
 <img src="assets/panels/dropin-hires.gif" alt="axl-otel is a drop-in sidecar with zero code changes" width="100%" />
 
 Drop a sidecar next to your agent. Point your existing OpenTelemetry
-SDK at it via `OTEL_EXPORTER_OTLP_ENDPOINT`. Your agent code stays
-untouched. No axl-otel library, no imports, no wrappers.
+SDK at it via `OTEL_EXPORTER_OTLP_ENDPOINT`. Done. Your agent code
+doesn't change. No axl-otel library, no imports, no wrappers.
 
 ### Works with any agent framework
 
 <img src="assets/panels/anylang-hires.gif" alt="Works with any agent framework: LangChain, Claude SDK, OpenAI, CrewAI, AutoGen, and more" width="100%" />
 
-LangChain, OpenClaw, Claude Agent SDK, OpenAI Agents, CrewAI, AutoGen:
-they all emit OpenTelemetry spans. `axl-otel` accepts standard OTLP.
-Plug in whatever you're already using, in whatever language, over
-whatever transport (MCP, A2A, plain HTTP, gRPC).
+LangChain, OpenClaw, Claude Agent SDK, OpenAI Agents, CrewAI, AutoGen
+— they all emit OpenTelemetry spans already. `axl-otel` takes standard
+OTLP. Whatever you're using, in whatever language, over whatever
+transport (MCP, A2A, plain HTTP, gRPC). Plug it in.
 
 ### Ships to any OpenTelemetry backend
 
 <img src="assets/panels/backends-hires.gif" alt="Ships to any OpenTelemetry backend: Jaeger, Grafana, Datadog, New Relic, Splunk, Sentry" width="100%" />
 
-Once spans land at the originator's sidecar, they're forwarded as plain
-OTLP to whatever backend you choose: Jaeger, Grafana Tempo, Datadog,
-New Relic, Splunk, Sentry, or any other OpenTelemetry-compatible store.
-No vendor lock-in.
+Once spans land at the originator's sidecar, they go out as plain
+OTLP to whatever backend you want. Jaeger, Grafana Tempo, Datadog,
+New Relic, Splunk, Sentry, anything OpenTelemetry-compatible. No
+vendor lock-in.
 
 ## What you see
 
@@ -64,24 +65,24 @@ No vendor lock-in.
 
 <img src="assets/panels/topology-hires.gif" alt="The entire architecture, exposed. Every hop and dependency becomes visible" width="100%" />
 
-Peers, hops, and dependencies you've never directly addressed all
-become visible. The complete shape of your distributed call lights up,
-not just your immediate neighbors.
+Peers, hops, dependencies you've never directly addressed — all of
+it lights up. The actual shape of the distributed call, not just your
+immediate neighbors.
 
 ### The full callstack, end to end
 
 <img src="assets/panels/trace-hires.gif" alt="Hierarchical trace with stack traces for errors" width="100%" />
 
-Every agent's span comes home. Nested calls, even ones that crossed
-peers you never directly addressed, assemble into a single hierarchical
-trace with stack traces attached to errors.
+Every agent's span comes home. Nested calls across peers you never
+directly talked to assemble into one hierarchical trace. Stack traces
+attached to errors.
 
 ## Install
 
-`axl-otel` ships as a Docker container and a single statically-linked
-binary. Pick whichever fits your deployment.
+Ships as a Docker container and a single statically-linked binary.
+Pick whichever fits.
 
-**Docker** ([container registry](https://github.com/Metroxe/axl-otel/pkgs/container/axl-otel)):
+**Docker** ([container registry](https://github.com/Metroxe/axl-otel/pkgs/container/axl-otel))
 
 ```bash
 docker pull ghcr.io/metroxe/axl-otel:latest
@@ -114,14 +115,13 @@ services:
       - "16686:16686" # UI
 ```
 
-Two requirements on the agent side, both standard OTel ecosystem
-features:
+Two things on the agent side, both standard OTel ecosystem features.
 
 1. Set `originator_peer_id` as an OpenTelemetry baggage entry at the
-   start of any workflow you want traced. Its value is your local AXL
+   start of any workflow you want traced. Value is your local AXL
    node's ed25519 peer ID.
-2. Register the standard `BaggageSpanProcessor` so baggage entries are
-   stamped onto spans as attributes at span-start.
+2. Register the standard `BaggageSpanProcessor` so baggage entries
+   get stamped onto spans as attributes at span-start.
 
 That's it. No axl-otel client library to import. No protocol-specific
 glue.
@@ -132,7 +132,8 @@ Citation-DB`) running on a local Docker bridge network.
 
 ## How it works
 
-For each span the sidecar receives over OTLP:
+For every span the sidecar receives over OTLP, one of two things
+happens.
 
 - If the `originator_peer_id` attribute equals this peer's ID (or is
   unset), forward to the local OTel backend (Jaeger, Datadog, etc.).

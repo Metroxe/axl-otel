@@ -5,10 +5,37 @@ const eventsEl = document.getElementById("events");
 const peerEl = document.getElementById("peer-id");
 const historyEl = document.getElementById("history");
 const rateWarnEl = document.getElementById("rate-warn");
+const aboutDialogEl = document.getElementById("about-dialog");
+const aboutBtnEl = document.getElementById("about-btn");
+const aboutLinkEl = document.getElementById("about-link");
+const aboutCloseEl = document.getElementById("about-close");
 const jaegerLinkEls = [
   document.getElementById("jaeger-link"),
   document.getElementById("jaeger-link-2"),
 ].filter(Boolean);
+
+function openAboutDialog() {
+  if (!aboutDialogEl) return;
+  if (typeof aboutDialogEl.showModal === "function") {
+    if (!aboutDialogEl.open) aboutDialogEl.showModal();
+  } else {
+    aboutDialogEl.setAttribute("open", "");
+  }
+}
+function closeAboutDialog() {
+  if (!aboutDialogEl) return;
+  if (typeof aboutDialogEl.close === "function") {
+    aboutDialogEl.close();
+  } else {
+    aboutDialogEl.removeAttribute("open");
+  }
+}
+aboutBtnEl?.addEventListener("click", openAboutDialog);
+aboutLinkEl?.addEventListener("click", openAboutDialog);
+aboutCloseEl?.addEventListener("click", closeAboutDialog);
+aboutDialogEl?.addEventListener("click", (event) => {
+  if (event.target === aboutDialogEl) closeAboutDialog();
+});
 
 let jaegerUiUrl = "/jaeger/";
 const historyEntries = new Map();

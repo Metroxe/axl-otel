@@ -4,6 +4,52 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>AXL OTel demo · Editor</title>
+    <meta
+      name="description"
+      content="Live demo of AXL OpenTelemetry: a drop-in OTLP sidecar that turns AXL's peer-to-peer mesh into an OpenTelemetry transport. Watch a request fan out across five agents and every span come back home."
+    />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="AXL OpenTelemetry" />
+    <meta
+      property="og:title"
+      content="AXL OpenTelemetry — distributed tracing for AXL meshes"
+    />
+    <meta
+      property="og:description"
+      content="A drop-in OTLP sidecar. Every span from every agent flows back to the originator — no central collector, no shared infra."
+    />
+    <meta property="og:url" content="https://axl-otel-demo.boilerroom.tech/" />
+    <meta
+      property="og:image"
+      content="https://axl-otel-demo.boilerroom.tech/og-cover.png"
+    />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="A request fans out across an AXL mesh and every span comes back home"
+    />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="AXL OpenTelemetry — distributed tracing for AXL meshes"
+    />
+    <meta
+      name="twitter:description"
+      content="A drop-in OTLP sidecar. Every span from every agent flows back to the originator."
+    />
+    <meta
+      name="twitter:image"
+      content="https://axl-otel-demo.boilerroom.tech/og-cover.png"
+    />
+    <meta
+      name="twitter:image:alt"
+      content="A request fans out across an AXL mesh and every span comes back home"
+    />
+
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body class="demo">
@@ -16,6 +62,9 @@
         <span class="peer-pill" title="Editor peer id">
           editor <code id="peer-id">…</code>
         </span>
+        <button id="about-btn" class="topbar-btn" type="button">
+          About this demo
+        </button>
         <a
           id="jaeger-link"
           class="topbar-link"
@@ -27,7 +76,88 @@
       </div>
     </header>
 
+    <dialog id="about-dialog" class="about-dialog">
+      <article>
+        <header class="about-head">
+          <h2>AXL&nbsp;OTel — what you're looking at</h2>
+          <button
+            id="about-close"
+            class="about-close"
+            type="button"
+            aria-label="Close"
+          >×</button>
+        </header>
+        <p>
+          This is a demo of <strong>distributed tracing over an AXL
+          peer-to-peer mesh</strong>. Five independent agents — the
+          Editor and four downstream peers — run on separate AXL nodes.
+          The Editor only knows two of them by public key; the other two
+          are reached <em>through</em> those peers. A small sidecar
+          turns AXL into an OpenTelemetry transport so every span comes
+          home to a single Jaeger UI, even from peers the Editor never
+          directly addresses.
+        </p>
+
+        <div class="about-callout">
+          <strong>The error you see is intentional.</strong> The default
+          prompt points the Fact-Checker at a domain the Citation-DB is
+          hard-coded to reject. The whole point of the demo is to watch
+          that failure propagate <em>home</em> over OTel — without the
+          sidecar, the Editor only knows "fact_check failed"; with it,
+          the Editor sees the exact peer, hop, and message that broke.
+        </div>
+
+        <h3>What to try</h3>
+        <ol class="about-steps">
+          <li>Click <strong>Run workflow</strong>. Watch the mesh build
+            itself as spans arrive.</li>
+          <li>The directly-called peers (Researcher, Fact-Checker)
+            always light up. The deeper peers (Web-Search, Citation-DB)
+            only appear if their spans came home over AXL.</li>
+          <li>Click <strong>Open Jaeger ↗</strong> on any run to see
+            the full trace tree, including spans from peers the Editor
+            never opened a connection to.</li>
+        </ol>
+
+        <h3>Two modes</h3>
+        <ul class="about-modes">
+          <li>
+            <strong>Sidecar ON (this is what you're running):</strong>
+            All four downstream peers light up. The Citation-DB error
+            shows up verbatim on the leaf node and propagates back up
+            the chain.
+          </li>
+          <li>
+            <strong>Sidecar OFF (the "broken" demo):</strong> Only the
+            two direct peers light up. The Editor reports a generic
+            "fact_check failed" — same workflow, same crash, no path
+            home.
+          </li>
+        </ul>
+
+        <p class="about-foot">
+          Source &amp; spec:
+          <a href="https://github.com/Metroxe/axl-otel" target="_blank"
+            rel="noopener">github.com/Metroxe/axl-otel</a>
+        </p>
+      </article>
+    </dialog>
+
     <section class="prompt-bar">
+      <div class="demo-note">
+        <span class="demo-note-tag">demo</span>
+        <span>
+          The default prompt is <strong>rigged to fail on purpose</strong>
+          — Citation-DB rejects the
+          <code>demo-fail.example.com</code> source, two hops away. You
+          should see an error; that's the workflow propagating home.
+          <button
+            id="about-link"
+            type="button"
+            class="demo-note-link"
+          >What is this?</button>
+        </span>
+      </div>
       <textarea
         id="prompt"
         rows="2"

@@ -98,6 +98,162 @@ body.demo {
 }
 .topbar-link:hover { text-decoration: underline; }
 
+.topbar-btn {
+  padding: 4px 0.65rem;
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid rgba(122, 162, 247, 0.4);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.topbar-btn:hover {
+  background: rgba(122, 162, 247, 0.1);
+  border-color: var(--accent);
+}
+
+/* ---------- demo note (intentional-error banner) ---------- */
+
+.demo-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.45rem 0.7rem;
+  background: rgba(224, 175, 104, 0.08);
+  border: 1px solid rgba(224, 175, 104, 0.3);
+  border-radius: 6px;
+  font-size: 0.78rem;
+  color: var(--text);
+  line-height: 1.4;
+}
+.demo-note code {
+  background: rgba(224, 175, 104, 0.12);
+  padding: 0 0.25rem;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  color: var(--warn);
+}
+.demo-note-tag {
+  flex: 0 0 auto;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--warn);
+  background: rgba(224, 175, 104, 0.12);
+  border: 1px solid rgba(224, 175, 104, 0.4);
+  border-radius: 3px;
+  padding: 2px 0.4rem;
+  margin-top: 1px;
+}
+.demo-note-link {
+  margin-left: 0.4rem;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.demo-note-link:hover { color: #9bb8ff; }
+
+/* ---------- about dialog ---------- */
+
+.about-dialog {
+  margin: auto;
+  padding: 0;
+  max-width: 560px;
+  width: calc(100% - 2rem);
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+}
+.about-dialog::backdrop {
+  background: rgba(8, 10, 14, 0.65);
+  backdrop-filter: blur(2px);
+}
+.about-dialog article {
+  padding: 1.25rem 1.5rem 1.4rem;
+  max-height: min(80vh, 720px);
+  overflow: auto;
+}
+.about-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+.about-head h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.about-close {
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  font-size: 1.4rem;
+  line-height: 1;
+  padding: 2px 0.4rem;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.about-close:hover { color: var(--text); background: var(--panel-2); }
+
+.about-dialog p,
+.about-dialog ol,
+.about-dialog ul {
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--text);
+}
+.about-dialog h3 {
+  margin: 1rem 0 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.about-dialog ol,
+.about-dialog ul {
+  padding-left: 1.2rem;
+  margin: 0;
+}
+.about-dialog li { margin-bottom: 0.35rem; }
+.about-dialog code {
+  background: var(--bg);
+  padding: 0 0.3rem;
+  border-radius: 3px;
+  font-size: 0.82em;
+}
+
+.about-callout {
+  margin: 0.85rem 0;
+  padding: 0.7rem 0.85rem;
+  background: rgba(247, 118, 142, 0.08);
+  border: 1px solid rgba(247, 118, 142, 0.35);
+  border-left-width: 3px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.about-callout strong { color: var(--bad); }
+
+.about-foot {
+  margin-top: 1rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
 /* ---------- prompt bar ---------- */
 
 .prompt-bar {
