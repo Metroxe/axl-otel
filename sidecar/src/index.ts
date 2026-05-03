@@ -19,7 +19,7 @@ async function run(opts: CliOptions): Promise<void> {
   const axl = new AxlClient({ baseUrl: opts.axlUrl });
   const ourPeerId = await axl.getPeerId();
   console.log(
-    `axl-otel: peer ${ourPeerId.slice(0, 12)}…  axl=${opts.axlUrl}  otlp=${opts.otlpUrl}  receive=${opts.receive}`,
+    `axl-otel: peer ${ourPeerId.slice(0, 12)}…  axl=${opts.axlUrl}  otlp=${opts.otlpUrl}  receive=${opts.receive}  inbound-callback=${opts.inboundCallbackUrl ?? "(none)"}`,
   );
 
   async function forwardToBackend(
@@ -84,6 +84,7 @@ async function run(opts: CliOptions): Promise<void> {
     payload: ExportTraceServiceRequest,
   ): Promise<void> {
     if (!opts.inboundCallbackUrl) return;
+    const count = countSpans(payload);
     try {
       const res = await fetch(opts.inboundCallbackUrl, {
         method: "POST",
@@ -92,7 +93,11 @@ async function run(opts: CliOptions): Promise<void> {
       });
       if (!res.ok) {
         console.error(
-          `axl-otel: inbound callback ${opts.inboundCallbackUrl} returned ${res.status}`,
+          `axl-otel: inbound callback ${opts.inboundCallbackUrl} returned ${res.status} for ${count} span(s)`,
+        );
+      } else {
+        console.log(
+          `axl-otel: inbound callback delivered ${count} span(s)`,
         );
       }
     } catch (err) {
