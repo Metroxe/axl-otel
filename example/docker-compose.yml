@@ -54,9 +54,13 @@ services:
       # from the browser-facing JAEGER_UI_URL above.
       JAEGER_QUERY_URL: ${JAEGER_QUERY_URL:-http://jaeger:16686}
       # Public-demo abuse limits. Both default to safe values; override via
-      # env on the VPS if you want to raise/lower the cap.
-      RATE_LIMIT_PER_IP_HOUR: ${RATE_LIMIT_PER_IP_HOUR:-3}
+      # env on the VPS if you want to raise/lower the cap. The per-IP cap
+      # only applies to traffic arriving via Cloudflare (cf-connecting-ip
+      # header present); local/dev traffic is bounded by the global cap.
+      RATE_LIMIT_PER_IP_WINDOW: ${RATE_LIMIT_PER_IP_WINDOW:-3}
       RATE_LIMIT_GLOBAL_DAY: ${RATE_LIMIT_GLOBAL_DAY:-50}
+      # Comma-separated cf-connecting-ip values that bypass all rate limits.
+      RATE_LIMIT_IP_WHITELIST: ${RATE_LIMIT_IP_WHITELIST:-}
     ports:
       - "8080:8080"
     volumes:

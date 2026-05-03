@@ -12,8 +12,19 @@ const SERVICE_NAME = process.env.OTEL_SERVICE_NAME ?? "editor";
 const AXL_URL = process.env.AXL_URL ?? "http://127.0.0.1:9002";
 const PORT = Number(process.env.PORT ?? 8080);
 const JAEGER_UI_URL = process.env.JAEGER_UI_URL ?? "http://localhost:16686";
-const RATE_LIMIT_PER_IP_HOUR = Number(process.env.RATE_LIMIT_PER_IP_HOUR ?? 3);
+const RATE_LIMIT_PER_IP_WINDOW = Number(
+  process.env.RATE_LIMIT_PER_IP_WINDOW ?? 3,
+);
 const RATE_LIMIT_GLOBAL_DAY = Number(process.env.RATE_LIMIT_GLOBAL_DAY ?? 50);
+// Comma-separated list of client IPs that bypass both per-IP and global
+// caps. Only the cf-connecting-ip is matched, so a whitelist entry is
+// only meaningful for traffic arriving via Cloudflare.
+const RATE_LIMIT_IP_WHITELIST = new Set(
+  (process.env.RATE_LIMIT_IP_WHITELIST ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0),
+);
 const RUN_TIMEOUT_MS = Number(process.env.RUN_TIMEOUT_MS ?? 60_000);
 const TOOL_STALE_MS = Number(process.env.TOOL_STALE_MS ?? 15_000);
 // Jaeger's HTTP query API. Used by the server to poll for trace
@@ -28,26 +39,42 @@ const TRACE_POLL_INTERVAL_MS = Number(
 const TRACE_POLL_TIMEOUT_MS = Number(
   process.env.TRACE_POLL_TIMEOUT_MS ?? 60_000,
 );
-const HOUR_MS = 60 * 60 * 1000;
-const DAY_MS = 24 * HOUR_MS;
+const PER_IP_WINDOW_MS = 5 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const ipRequestTimes = new Map<string, number[]>();
 const dailyRunTimes: number[] = [];
 
-function clientIp(req: Request): string {
+// `cf-connecting-ip` is set by Cloudflare and cannot be spoofed when the
+// origin only accepts traffic from CF. When present we trust it as the
+// real client IP and apply per-IP rate limiting. Without it (local dev,
+// direct origin access) we can't tell clients apart, so we skip per-IP
+// checks and rely on the global daily cap alone.
+function clientIp(req: Request): { ip: string; viaCloudflare: boolean } {
   const cf = req.headers.get("cf-connecting-ip");
-  if (cf) return cf.trim();
+  if (cf) return { ip: cf.trim(), viaCloudflare: true };
   const xff = req.headers.get("x-forwarded-for");
-  if (xff) return xff.split(",")[0]?.trim() ?? "unknown";
-  return "unknown";
+  if (xff) {
+    return { ip: xff.split(",")[0]?.trim() ?? "unknown", viaCloudflare: false };
+  }
+  return { ip: "unknown", viaCloudflare: false };
 }
 
-function checkAndRecordRateLimit(ip: string): {
+function checkAndRecordRateLimit(
+  ip: string,
+  viaCloudflare: boolean,
+): {
   ok: boolean;
   status?: number;
   error?: string;
   retryAfterSec?: number;
 } {
+  // Whitelisted IPs bypass both caps and aren't counted toward either —
+  // useful for the maintainer's own traffic during demos/recordings.
+  if (viaCloudflare && RATE_LIMIT_IP_WHITELIST.has(ip)) {
+    return { ok: true };
+  }
+
   const now = Date.now();
 
   while (dailyRunTimes.length > 0 && dailyRunTimes[0]! < now - DAY_MS) {
@@ -64,22 +91,28 @@ function checkAndRecordRateLimit(ip: string): {
     };
   }
 
-  const recent = (ipRequestTimes.get(ip) ?? []).filter(
-    (t) => t > now - HOUR_MS,
-  );
-  if (recent.length >= RATE_LIMIT_PER_IP_HOUR) {
-    const oldest = recent[0]!;
-    const wait = Math.ceil((oldest + HOUR_MS - now) / 60_000);
-    return {
-      ok: false,
-      status: 429,
-      error: `Too many runs from this IP. Try again in ~${wait} minute${wait === 1 ? "" : "s"}.`,
-      retryAfterSec: Math.ceil((oldest + HOUR_MS - now) / 1000),
-    };
+  if (viaCloudflare) {
+    const recent = (ipRequestTimes.get(ip) ?? []).filter(
+      (t) => t > now - PER_IP_WINDOW_MS,
+    );
+    if (recent.length >= RATE_LIMIT_PER_IP_WINDOW) {
+      const oldest = recent[0]!;
+      const waitSec = Math.ceil((oldest + PER_IP_WINDOW_MS - now) / 1000);
+      const waitMin = Math.ceil(waitSec / 60);
+      return {
+        ok: false,
+        status: 429,
+        error:
+          `You've been rate limited (${RATE_LIMIT_PER_IP_WINDOW} runs per 5 minutes). ` +
+          `This demo uses a real, paid LLM, so the public instance is capped to keep costs sane. ` +
+          `Try again in ~${waitMin} minute${waitMin === 1 ? "" : "s"}, or scroll back through the previous traces in the sidebar to see examples of completed runs.`,
+        retryAfterSec: waitSec,
+      };
+    }
+    recent.push(now);
+    ipRequestTimes.set(ip, recent);
   }
 
-  recent.push(now);
-  ipRequestTimes.set(ip, recent);
   dailyRunTimes.push(now);
   return { ok: true };
 }
@@ -278,7 +311,20 @@ async function serveStatic(
     });
     span.end();
   }
-  return new Response(file);
+  // Cloudflare in front of this demo will happily cache .js/.css for hours
+  // by default, which means a deploy can ship and the public site keeps
+  // serving the old assets. Mark page shell + scripts as no-cache so any
+  // CDN revalidates with us on every request. Static binary assets
+  // (images, og covers, favicons) are still cacheable.
+  const headers: Record<string, string> = {};
+  if (
+    rel.endsWith(".html") ||
+    rel.endsWith(".js") ||
+    rel.endsWith(".css")
+  ) {
+    headers["Cache-Control"] = "no-cache, must-revalidate";
+  }
+  return new Response(file, { headers });
 }
 
 Bun.serve({
@@ -331,8 +377,8 @@ Bun.serve({
           { status: 400 },
         );
       }
-      const ip = clientIp(req);
-      const limit = checkAndRecordRateLimit(ip);
+      const { ip, viaCloudflare } = clientIp(req);
+      const limit = checkAndRecordRateLimit(ip, viaCloudflare);
       if (!limit.ok) {
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
