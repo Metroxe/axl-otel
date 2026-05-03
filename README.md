@@ -11,7 +11,7 @@
 
   <p>
     <a href="SPEC.md">Spec</a> &middot;
-    <a href="example/">5-agent demo</a> &middot;
+    <a href="https://axl-otel-demo.boilerroom.tech/">5-agent demo</a> &middot;
     <a href="https://docs.gensyn.ai/tech/agent-exchange-layer">About AXL</a>
   </p>
 </div>
