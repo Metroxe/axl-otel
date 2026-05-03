@@ -103,7 +103,8 @@
     <dialog id="about-dialog" class="about-dialog">
       <article>
         <header class="about-head">
-          <h2>AXL&nbsp;OTel — what you're looking at</h2>
+          <div class="about-eyebrow">Demo</div>
+          <h2>What this is even showing</h2>
           <button
             id="about-close"
             class="about-close"
@@ -111,56 +112,98 @@
             aria-label="Close"
           >×</button>
         </header>
-        <p>
-          This is a demo of <strong>distributed tracing over an AXL
-          peer-to-peer mesh</strong>. Five independent agents — the
-          Editor and four downstream peers — run on separate AXL nodes.
-          The Editor only knows two of them by public key; the other two
-          are reached <em>through</em> those peers. A small sidecar
-          turns AXL into an OpenTelemetry transport so every span comes
-          home to a single Jaeger UI, even from peers the Editor never
-          directly addresses.
-        </p>
+
+        <section class="about-section">
+          <h3>The problem</h3>
+          <p>
+            AXL is peer-to-peer. Your agents address other agents by
+            public key, and those agents talk to peers you've never
+            heard of. Three hops in, something errors and your agent
+            has no idea. No log, no trace, no path back. The deeper
+            the call chain, the darker it gets.
+          </p>
+        </section>
+
+        <section class="about-section">
+          <h3>What's running on this page</h3>
+          <p>
+            Five agents on five separate AXL nodes. The
+            <strong>Editor</strong> (the page you're on) only has two
+            peer keys directly, <strong>Researcher</strong> and
+            <strong>Fact-Checker</strong>. <strong>Web-Search</strong>
+            and <strong>Citation-DB</strong> sit one hop further out
+            and the Editor has never directly addressed them. They're
+            reached only through their upstream peers.
+          </p>
+          <pre class="about-topology">Editor ──▶ Researcher   ──▶ Web-Search
+   └────▶ Fact-Checker ──▶ Citation-DB   ← rigged to fail</pre>
+        </section>
 
         <div class="about-callout">
-          <strong>The error you see is intentional.</strong> The default
-          prompt points the Fact-Checker at a domain the Citation-DB is
-          hard-coded to reject. The whole point of the demo is to watch
-          that failure propagate <em>home</em> over OTel — without the
-          sidecar, the Editor only knows "fact_check failed"; with it,
-          the Editor sees the exact peer, hop, and message that broke.
+          <strong>The failure is on purpose.</strong> The default
+          prompt feeds Citation-DB a junk source it's hard-coded to
+          reject (<code>demo-fail.example.com</code>). The whole demo
+          is watching that error come back home. Without the sidecar
+          the Editor just knows "fact_check failed" and that's it.
+          With it, the Editor sees the exact peer, the exact hop, and
+          the real error message from two agents away.
         </div>
 
-        <h3>What to try</h3>
-        <ol class="about-steps">
-          <li>Click <strong>Run workflow</strong>. Watch the mesh build
-            itself as spans arrive.</li>
-          <li>The directly-called peers (Researcher, Fact-Checker)
-            always light up. The deeper peers (Web-Search, Citation-DB)
-            only appear if their spans came home over AXL.</li>
-          <li>Click <strong>Open Jaeger ↗</strong> on any run to see
-            the full trace tree, including spans from peers the Editor
-            never opened a connection to.</li>
-        </ol>
+        <section class="about-section">
+          <h3>Two modes</h3>
+          <div class="about-modes">
+            <div class="about-mode about-mode-on">
+              <div class="about-mode-tag">Sidecar ON · this run</div>
+              <p>
+                All four downstream peers light up as their spans come
+                home over AXL. Citation-DB's error shows up
+                word-for-word on the leaf node and walks back up the
+                chain to the Editor. Open Jaeger and you'll see the
+                full trace tree, five services, the red span two hops
+                deep with the exception attached.
+              </p>
+            </div>
+            <div class="about-mode about-mode-off">
+              <div class="about-mode-tag">Sidecar OFF · the dark run</div>
+              <p>
+                Only the two direct peers light up. The Editor reports
+                a generic "fact_check failed" because nothing about
+                Citation-DB ever made it home. Same workflow, same
+                crash, no trace. This is what debugging on AXL looks
+                like today.
+              </p>
+            </div>
+          </div>
+        </section>
 
-        <h3>Two modes</h3>
-        <ul class="about-modes">
-          <li>
-            <strong>Sidecar ON (this is what you're running):</strong>
-            All four downstream peers light up. The Citation-DB error
-            shows up verbatim on the leaf node and propagates back up
-            the chain.
-          </li>
-          <li>
-            <strong>Sidecar OFF (the "broken" demo):</strong> Only the
-            two direct peers light up. The Editor reports a generic
-            "fact_check failed" — same workflow, same crash, no path
-            home.
-          </li>
-        </ul>
+        <section class="about-section">
+          <h3>How it works</h3>
+          <p>
+            The sidecar runs next to every agent and pretends to be an
+            OpenTelemetry collector. Each span gets stamped with the
+            originating peer's ID via standard OTel baggage. If the
+            span belongs to this peer the sidecar forwards it to
+            Jaeger. If it belongs to someone else the sidecar ships it
+            home over AXL itself. No central collector, no client
+            library to import, no shared infra.
+          </p>
+        </section>
+
+        <section class="about-section">
+          <h3>What to try</h3>
+          <ol class="about-steps">
+            <li>Hit <strong>Run workflow</strong>. Watch the mesh
+              build itself as spans land.</li>
+            <li>Click <strong>Open Jaeger ↗</strong> on any run to see
+              the full trace tree, including spans from peers the
+              Editor never directly talked to.</li>
+            <li>Expand the red Citation-DB span in Jaeger to see the
+              exception that travelled two hops home.</li>
+          </ol>
+        </section>
 
         <p class="about-foot">
-          Source &amp; spec:
+          Source, spec, and the local one-command demo
           <a href="https://github.com/Metroxe/axl-otel" target="_blank"
             rel="noopener">github.com/Metroxe/axl-otel</a>
         </p>
@@ -169,17 +212,17 @@
 
     <section class="prompt-bar">
       <div class="demo-note">
-        <span class="demo-note-tag">demo</span>
-        <span>
-          The default prompt is <strong>rigged to fail on purpose</strong>
-          — Citation-DB rejects the
-          <code>demo-fail.example.com</code> source, two hops away. You
-          should see an error; that's the workflow propagating home.
+        <span class="demo-note-tag">heads up</span>
+        <span class="demo-note-body">
+          <strong>The error is on purpose.</strong> The default prompt
+          is rigged to fail at Citation-DB two hops away
+          (<code>demo-fail.example.com</code>), and the whole demo is
+          watching that failure come back over OTel.
           <button
             id="about-link"
             type="button"
             class="demo-note-link"
-          >What is this?</button>
+          >What is this? →</button>
         </span>
       </div>
       <textarea
