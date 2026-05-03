@@ -6,6 +6,7 @@ const SERVICE_NAME = process.env.OTEL_SERVICE_NAME ?? "fact-checker";
 const AXL_URL = process.env.AXL_URL ?? "http://127.0.0.1:9002";
 const ROUTER_URL = process.env.MCP_ROUTER_URL ?? "http://127.0.0.1:9003";
 const MCP_PORT = Number(process.env.MCP_LISTEN_PORT ?? 7100);
+const CITATION_TIMEOUT_MS = Number(process.env.CITATION_TIMEOUT_MS ?? 8_000);
 
 type Reputability = "high" | "medium" | "low" | "unknown";
 type Verdict = {
@@ -83,16 +84,43 @@ const tools: ToolDef[] = [
         ? (args.sources as string[])
         : [];
       const citationPeer = readPeerId("citation-db");
-      const lookup = await callMcp<LookupResponse>({
-        axlUrl: AXL_URL,
-        peerId: citationPeer,
-        service: "citation-db",
-        tool: "lookup",
-        args: { urls: sources },
-        tracer,
-      });
-      const verdict = judge(lookup.verdicts);
-      return { claim, ...verdict, sources: lookup.verdicts };
+      // Bound the citation-db round-trip so the editor sees a real error
+      // response instead of hanging forever when citation-db is unresponsive.
+      // The error message names the downstream peer so the editor's UI can
+      // attribute the failure correctly.
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => {
+        ctrl.abort(
+          new Error(
+            `citation-db unresponsive after ${CITATION_TIMEOUT_MS / 1000}s`,
+          ),
+        );
+      }, CITATION_TIMEOUT_MS);
+      try {
+        const lookup = await callMcp<LookupResponse>({
+          axlUrl: AXL_URL,
+          peerId: citationPeer,
+          service: "citation-db",
+          tool: "lookup",
+          args: { urls: sources },
+          tracer,
+          signal: ctrl.signal,
+        });
+        const verdict = judge(lookup.verdicts);
+        return { claim, ...verdict, sources: lookup.verdicts };
+      } catch (err) {
+        if (ctrl.signal.aborted) {
+          const reason = ctrl.signal.reason;
+          throw new Error(
+            reason instanceof Error
+              ? reason.message
+              : String(reason ?? "citation-db timeout"),
+          );
+        }
+        throw err;
+      } finally {
+        clearTimeout(timer);
+      }
     },
   },
 ];

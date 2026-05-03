@@ -6,75 +6,43 @@
     <title>AXL OTel demo · Editor</title>
     <link rel="stylesheet" href="/style.css" />
   </head>
-  <body>
-    <header>
-      <h1>AXL OTel demo</h1>
-      <p class="sub">
-        Peer-to-peer distributed tracing for an AXL agent mesh. Every span
-        emitted by every peer flows back to the originator's Jaeger via a
-        tiny OTel sidecar — no central collector, no preconfigured peer list.
-      </p>
+  <body class="demo">
+    <header class="topbar">
+      <div class="brand">
+        <strong>AXL&nbsp;OTel</strong>
+        <span class="brand-sub">peer-to-peer distributed tracing</span>
+      </div>
+      <div class="topbar-meta">
+        <span class="peer-pill" title="Editor peer id">
+          editor <code id="peer-id">…</code>
+        </span>
+        <a
+          id="jaeger-link"
+          class="topbar-link"
+          href="/jaeger/"
+          target="_blank"
+          rel="noopener"
+          >Open Jaeger ↗</a
+        >
+      </div>
     </header>
 
-    <main>
-      <section class="intro">
-        <div class="intro-text">
-          <h2>What you're looking at</h2>
-          <p>
-            This page is the <strong>Editor</strong> — the originator. When
-            you submit a prompt it asks Claude Sonnet 4.6 which mesh tools to
-            call, then dispatches MCP requests to other peers across the
-            <a
-              href="https://docs.gensyn.ai/tech/agent-exchange-layer"
-              target="_blank"
-              rel="noopener"
-              >AXL P2P network</a
-            >. Each downstream peer can call further peers; every span lands
-            here in this Editor's local Jaeger thanks to the
-            <code>originator_peer_id</code> baggage entry the OTel sidecar
-            routes on.
-          </p>
-          <p class="intro-meta">
-            <span>Editor peer: <code id="peer-id">…</code></span>
-            <a id="jaeger-link" href="/jaeger/" target="_blank" rel="noopener"
-              >Open Jaeger →</a
-            >
-          </p>
-        </div>
-        <div class="intro-diagram" aria-hidden="true">
-          <pre>        ┌──────────┐
-        │  Editor  │ ← you
-        └────┬─────┘
-   ┌────────┴────────┐
-   ▼                 ▼
-┌──────────┐  ┌──────────────┐
-│Researcher│  │ Fact-Checker │
-└────┬─────┘  └──────┬───────┘
-     ▼               ▼
-┌──────────┐  ┌──────────────┐
-│Web-Search│  │ Citation-DB  │
-└──────────┘  └──────────────┘</pre>
-        </div>
-      </section>
+    <section class="prompt-bar">
+      <textarea
+        id="prompt"
+        rows="2"
+        placeholder="Ask the editor to fact-check a claim…"
+      >Fact-check this claim and cite sources: "AXL routes traffic over Yggdrasil." Use https://docs.gensyn.ai/axl and https://demo-fail.example.com/source as candidate citations.</textarea>
+      <div class="prompt-actions">
+        <button id="run">Run workflow</button>
+        <span id="rate-info" class="rate-info">demo: limited runs per IP / hour</span>
+      </div>
+      <div id="rate-warn" class="rate-warn" hidden></div>
+    </section>
 
-      <section class="run">
-        <label for="prompt">Prompt</label>
-        <textarea
-          id="prompt"
-          rows="3"
-          placeholder="e.g. Explain how OpenTelemetry baggage propagates over MCP, and verify the claim against reputable sources."
-        >Fact-check this claim and cite sources: "AXL routes traffic over Yggdrasil." Use https://docs.gensyn.ai/axl and https://demo-fail.example.com/source as candidate citations.</textarea>
-        <div class="run-row">
-          <button id="run">Run workflow</button>
-          <span id="rate-info" class="rate-info"
-            >Public demo: limited runs per IP per hour.</span
-          >
-        </div>
-        <div id="rate-warn" class="rate-warn" hidden></div>
-      </section>
-
-      <section class="mesh">
-        <div class="mesh-head">
+    <main class="stage">
+      <section class="mesh-panel">
+        <div class="panel-head">
           <h2>Mesh</h2>
           <span class="hint">live</span>
         </div>
@@ -124,9 +92,7 @@
               <span class="node-role">originator</span>
             </div>
             <div class="node-body">
-              <div class="node-summary">
-                Claude Sonnet 4.6 picks tools and composes the answer.
-              </div>
+              <div class="node-summary">Claude picks tools &amp; composes the answer.</div>
             </div>
           </div>
           <div class="node node-researcher" data-node="researcher">
@@ -136,9 +102,7 @@
               <span class="node-role">MCP · research</span>
             </div>
             <div class="node-body">
-              <div class="node-summary">
-                Synthesises sources from Web-Search.
-              </div>
+              <div class="node-summary">Synthesises sources from Web-Search.</div>
             </div>
           </div>
           <div class="node node-fact-checker" data-node="fact-checker">
@@ -148,9 +112,7 @@
               <span class="node-role">MCP · check</span>
             </div>
             <div class="node-body">
-              <div class="node-summary">
-                Asks Citation-DB about each source.
-              </div>
+              <div class="node-summary">Asks Citation-DB about each source.</div>
             </div>
           </div>
           <div class="node node-web-search" data-node="web-search">
@@ -170,43 +132,38 @@
               <span class="node-role">MCP · lookup</span>
             </div>
             <div class="node-body">
-              <div class="node-summary">
-                Hardcoded reputability table.
-              </div>
+              <div class="node-summary">Hardcoded reputability table.</div>
             </div>
           </div>
         </div>
-        <p class="mesh-foot">
-          Web-Search and Citation-DB are reached transitively via Researcher
-          and Fact-Checker — their detailed spans show up in
-          <a
-            id="jaeger-link-2"
-            href="/jaeger/"
-            target="_blank"
-            rel="noopener"
-            >Jaeger</a
-          >
-          alongside the rest of the trace.
-        </p>
       </section>
 
-      <section class="output" id="output-section">
-        <h2>Final answer</h2>
-        <div id="result" class="result" hidden></div>
-      </section>
+      <aside class="side-panel">
+        <section class="answer-panel">
+          <div class="panel-head">
+            <h2>Answer</h2>
+            <span class="hint">streaming</span>
+          </div>
+          <div id="result" class="result" hidden></div>
+          <p class="answer-empty">Run the workflow to see Claude compose live.</p>
+        </section>
 
-      <details class="raw">
-        <summary>Raw event log</summary>
-        <ol id="events"></ol>
-      </details>
-
-      <details class="raw">
-        <summary>Recent runs</summary>
-        <ol id="history" class="history-list">
-          <li class="history-empty">No requests yet.</li>
-        </ol>
-      </details>
+        <section class="history-panel">
+          <div class="panel-head">
+            <h2>Recent runs</h2>
+            <span class="hint">since reboot</span>
+          </div>
+          <ol id="history" class="history-list">
+            <li class="history-empty">No requests yet.</li>
+          </ol>
+        </section>
+      </aside>
     </main>
+
+    <details class="debug-tray">
+      <summary>Debug · raw event log</summary>
+      <ol id="events"></ol>
+    </details>
 
     <script src="/app.js"></script>
   </body>

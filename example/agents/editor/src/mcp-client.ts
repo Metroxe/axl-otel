@@ -20,6 +20,7 @@ export type CallMcpOptions = {
   tool: string;
   args: Record<string, unknown>;
   tracer: Tracer;
+  signal?: AbortSignal;
 };
 
 export async function callMcp<T = unknown>(opts: CallMcpOptions): Promise<T> {
@@ -49,6 +50,7 @@ export async function callMcp<T = unknown>(opts: CallMcpOptions): Promise<T> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal: opts.signal,
     });
     if (!res.ok) {
       throw new Error(`MCP call ${res.status}: ${await res.text()}`);

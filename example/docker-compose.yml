@@ -30,6 +30,10 @@ services:
       # Public Jaeger URL exposed by the reverse proxy. The Editor serves
       # the frontend at the apex and Jaeger under /jaeger/ on the same host.
       JAEGER_UI_URL: ${JAEGER_UI_URL:-/jaeger/}
+      # Internal Jaeger query API the editor polls after each run to know
+      # when the trace is queryable. Lives on the docker network, separate
+      # from the browser-facing JAEGER_UI_URL above.
+      JAEGER_QUERY_URL: ${JAEGER_QUERY_URL:-http://jaeger:16686}
       # Public-demo abuse limits. Both default to safe values; override via
       # env on the VPS if you want to raise/lower the cap.
       RATE_LIMIT_PER_IP_HOUR: ${RATE_LIMIT_PER_IP_HOUR:-3}

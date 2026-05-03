@@ -12,6 +12,34 @@ const jaegerLinkEls = [
 
 let jaegerUiUrl = "/jaeger/";
 const historyEntries = new Map();
+// Tools whose tool-stale event has already flipped them (and any downstream
+// peer) to a failed visual. The eventual tool-end — which arrives when the
+// editor's RUN_TIMEOUT_MS aborts the in-flight call — must not clobber that.
+const staleTools = new Set();
+// Nodes/edges that have already been "discovered" by an inbound event and
+// faded into the diagram. The diagram grows over time as the editor
+// observes peers being called; everything starts hidden.
+const revealedNodes = new Set();
+const revealedEdges = new Set();
+const TRANSITIVE_REVEAL_DELAY_MS = 250;
+// Pending staggered child-node reveals, keyed by tool name. We cancel
+// these the moment tool-end arrives so the result-application code can
+// own the child's status without being clobbered by a late timer.
+const pendingChildReveals = new Map();
+// Flipped true the moment any tool fails (or goes stale) during the run.
+// Keeps the editor node in its propagated-error state even after the
+// workflow completes, so the chain origin → propagator → editor stays
+// visible end-to-end. Reset on each request-start.
+let runHadToolError = false;
+// Number of in-flight Claude calls (tracked via the SSE span-start/span-end
+// events we publish from the editor's `claude.messages.create` spans). Used
+// to drive the editor's "writing report…" activity indicator so the user
+// can see the editor is still working even after the chain failed.
+let claudeActiveCount = 0;
+// Per-turn streaming buffer for Claude's text output. Each turn resets the
+// buffer; the result panel shows whatever Claude is currently composing.
+let streamingTurn = -1;
+let streamingBuffer = "";
 
 // Tools called directly by the editor map to mesh peers; each direct peer in
 // turn fans out to a transitive peer. We use that mapping to drive the
@@ -47,6 +75,9 @@ events.addEventListener("message", (msg) => {
       jaegerUiUrl = event.jaeger_ui_url.replace(/\/+$/, "") + "/";
       for (const a of jaegerLinkEls) a.href = jaegerUiUrl;
     }
+    // First node we know about: the originator. Everything else fades in
+    // as we observe it being called.
+    revealNode("editor");
     return;
   }
   if (event.type === "history") {
@@ -54,7 +85,22 @@ events.addEventListener("message", (msg) => {
     return;
   }
   if (event.type === "request-start") {
+    staleTools.clear();
+    for (const handle of pendingChildReveals.values()) clearTimeout(handle);
+    pendingChildReveals.clear();
+    runHadToolError = false;
+    claudeActiveCount = 0;
+    streamingTurn = -1;
+    streamingBuffer = "";
+    resultEl.classList.remove("streaming");
+    resultEl.hidden = true;
+    resultEl.textContent = "";
+    setEditorActivity(null);
     resetMesh();
+    // Re-grow the network from scratch on each run, so the demo shows the
+    // diagram constructing itself as logs come in. The editor stays as the
+    // anchor since it's the originator.
+    hideAllExceptEditor();
     setNodeStatus("editor", "running", { traceId: event.traceId });
     upsertHistoryEntry({
       traceId: event.traceId,
@@ -68,29 +114,94 @@ events.addEventListener("message", (msg) => {
   if (event.type === "tool-start") {
     const node = TOOL_TO_NODE[event.tool];
     if (node) {
+      revealNode(node);
+      revealEdge(`editor-${node}`);
       setEdgeActive(`editor-${node}`, true);
       setNodeStatus(node, "running", { peerId: event.peerId });
       const child = NODE_TO_CHILD[node];
       if (child) {
-        setEdgeActive(`${node}-${child}`, true);
-        setNodeStatus(child, "running");
+        // Stagger the transitive child so the chain visibly extends one
+        // hop further rather than popping in all at once. Track the timer
+        // so tool-end can cancel it if the call returns first.
+        const handle = setTimeout(() => {
+          pendingChildReveals.delete(event.tool);
+          revealNode(child);
+          revealEdge(`${node}-${child}`);
+          setEdgeActive(`${node}-${child}`, true);
+          setNodeStatus(child, "running");
+        }, TRANSITIVE_REVEAL_DELAY_MS);
+        pendingChildReveals.set(event.tool, handle);
       }
     }
-  } else if (event.type === "tool-end") {
+  } else if (event.type === "tool-stale") {
+    staleTools.add(event.tool);
+    cancelPendingChildReveal(event.tool);
+    runHadToolError = true;
+    refreshEditorActivity();
     const node = TOOL_TO_NODE[event.tool];
     if (node) {
       setEdgeActive(`editor-${node}`, false);
       const child = NODE_TO_CHILD[node];
-      if (child) setEdgeActive(`${node}-${child}`, false);
-      if (event.ok) {
+      let editorMsg;
+      if (child) {
+        revealNode(child);
+        revealEdge(`${node}-${child}`);
+        setEdgeActive(`${node}-${child}`, false);
+        setNodeStatus(child, "error", { message: "no response" });
+        editorMsg = `downstream timeout from ${child}`;
+        setNodeStatus(node, "error", { message: editorMsg });
+      } else {
+        editorMsg = "no response";
+        setNodeStatus(node, "error", { message: editorMsg });
+      }
+      setNodeStatus("editor", "error", { message: editorMsg });
+    }
+  } else if (event.type === "tool-end") {
+    cancelPendingChildReveal(event.tool);
+    const node = TOOL_TO_NODE[event.tool];
+    if (node) {
+      setEdgeActive(`editor-${node}`, false);
+      const child = NODE_TO_CHILD[node];
+      if (child) {
+        // Make sure the child is on screen (and its edge drawn) before we
+        // try to set its status — otherwise a fast tool would land before
+        // the staggered reveal had a chance to run, and the result would
+        // be applied to an invisible node.
+        revealNode(child);
+        revealEdge(`${node}-${child}`);
+        setEdgeActive(`${node}-${child}`, false);
+      }
+      if (staleTools.has(event.tool)) {
+        // Already flipped by tool-stale; preserve that visual.
+      } else if (event.ok) {
         applyToolResult(node, event.result);
       } else {
-        setNodeStatus(node, "error", { message: event.message ?? "error" });
-        if (child) setNodeStatus(child, "idle");
+        runHadToolError = true;
+        refreshEditorActivity();
+        const rawMsg = event.message ?? "error";
+        const cleaned = cleanErrorMessage(rawMsg);
+        // The downstream peer (e.g. citation-db) originated the failure;
+        // the direct peer (e.g. fact-checker) propagated it back to the
+        // editor. Show the same propagated message on every hop so the
+        // chain — origin → propagator → editor — is visible end-to-end.
+        if (child && messageMentions(rawMsg, child)) {
+          setNodeStatus(child, "error", { message: cleaned });
+          setNodeStatus(node, "error", { message: cleaned });
+        } else {
+          setNodeStatus(node, "error", { message: cleaned });
+          if (child) setNodeStatus(child, "idle");
+        }
+        setNodeStatus("editor", "error", { message: cleaned });
       }
     }
   } else if (event.type === "result" && event.traceId) {
-    setNodeStatus("editor", "ok");
+    // Only flip the editor green if no tool failed during this run; if the
+    // chain propagated an error up to the editor, leave that visual in
+    // place even after Claude composes its final answer.
+    if (!runHadToolError) setNodeStatus("editor", "ok");
+    claudeActiveCount = 0;
+    setEditorActivity(null);
+    resultEl.classList.remove("streaming");
     upsertHistoryEntry({
       traceId: event.traceId,
       status: "ok",
@@ -98,13 +209,55 @@ events.addEventListener("message", (msg) => {
       endedAt: event.ts,
     });
   } else if (event.type === "error" && event.traceId) {
-    setNodeStatus("editor", "error", { message: event.message });
+    const status = event.timeout ? "timeout" : "error";
+    setNodeStatus("editor", status, { message: event.message });
+    claudeActiveCount = 0;
+    setEditorActivity(null);
+    resultEl.classList.remove("streaming");
     upsertHistoryEntry({
       traceId: event.traceId,
-      status: "error",
+      status,
       error: event.message,
       endedAt: event.ts,
     });
+  } else if (event.type === "trace-ready" && event.traceId) {
+    upsertHistoryEntry({ traceId: event.traceId, traceReady: true });
+  } else if (event.type === "claude-stream-start") {
+    // New turn: keep prior turns in the panel; just add a blank-line
+    // separator so the chain of reasoning reads top-to-bottom without
+    // earlier text being overwritten.
+    if (streamingBuffer.length > 0 && event.turn !== streamingTurn) {
+      streamingBuffer += "\n\n";
+    }
+    streamingTurn = event.turn ?? -1;
+    resultEl.hidden = false;
+    resultEl.textContent = streamingBuffer;
+    resultEl.classList.add("streaming");
+  } else if (event.type === "claude-text-delta") {
+    if (event.turn !== streamingTurn) {
+      // Edge case: delta arrived before stream-start (or out of order).
+      // Apply the same separator rule so we never blow away prior text.
+      if (streamingBuffer.length > 0) streamingBuffer += "\n\n";
+      streamingTurn = event.turn ?? -1;
+    }
+    streamingBuffer += event.text ?? "";
+    resultEl.hidden = false;
+    resultEl.classList.add("streaming");
+    resultEl.textContent = streamingBuffer;
+  } else if (event.type === "claude-stream-end") {
+    resultEl.classList.remove("streaming");
+  } else if (event.type === "span-start" || event.type === "span-end") {
+    // The editor publishes `claude.messages.create` spans for each LLM
+    // round-trip (carries `gen_ai.system=anthropic` in attributes). Use them
+    // to drive a live "writing report…" indicator on the editor node so the
+    // viewer can see Claude is still composing even after the chain
+    // propagated an error.
+    const attrs = event.span?.attributes ?? {};
+    if (attrs["gen_ai.system"]) {
+      if (event.type === "span-start") claudeActiveCount += 1;
+      else claudeActiveCount = Math.max(0, claudeActiveCount - 1);
+      refreshEditorActivity();
+    }
   }
   appendEvent(event);
 });
@@ -143,15 +296,89 @@ function resetMesh() {
   }
 }
 
+function revealNode(name) {
+  if (revealedNodes.has(name)) return;
+  const el = nodeEl(name);
+  if (!el) return;
+  // rAF lets the browser paint the hidden state first, so the transition
+  // actually animates rather than snapping straight to revealed.
+  requestAnimationFrame(() => el.classList.add("revealed"));
+  revealedNodes.add(name);
+}
+
+function revealEdge(name) {
+  if (revealedEdges.has(name)) return;
+  const el = edgeEl(name);
+  if (!el) return;
+  requestAnimationFrame(() => el.classList.add("revealed"));
+  revealedEdges.add(name);
+}
+
+function cancelPendingChildReveal(tool) {
+  const handle = pendingChildReveals.get(tool);
+  if (handle !== undefined) {
+    clearTimeout(handle);
+    pendingChildReveals.delete(tool);
+  }
+}
+
+// Manage a small italic pulsing line under the editor's body — used as a
+// "thinking…" / "writing report…" indicator while a Claude span is active.
+// Kept separate from the .node-output (which holds the propagated error)
+// so both can coexist when Claude is composing despite a downstream error.
+function setEditorActivity(text) {
+  const el = nodeEl("editor");
+  const body = el?.querySelector(".node-body");
+  if (!body) return;
+  let activity = body.querySelector(".editor-activity");
+  if (!text) {
+    if (activity) activity.remove();
+    return;
+  }
+  if (!activity) {
+    activity = document.createElement("div");
+    activity.className = "editor-activity";
+    body.appendChild(activity);
+  }
+  activity.textContent = text;
+}
+
+function refreshEditorActivity() {
+  if (claudeActiveCount <= 0) {
+    setEditorActivity(null);
+    return;
+  }
+  setEditorActivity(runHadToolError ? "writing report…" : "thinking…");
+}
+
+function hideAllExceptEditor() {
+  for (const n of revealedNodes) {
+    if (n === "editor") continue;
+    nodeEl(n)?.classList.remove("revealed");
+  }
+  revealedNodes.clear();
+  if (nodeEl("editor")) revealedNodes.add("editor");
+  for (const e of revealedEdges) {
+    edgeEl(e)?.classList.remove("revealed");
+  }
+  revealedEdges.clear();
+}
+
 function setNodeStatus(name, status, meta = {}) {
   const el = nodeEl(name);
   if (!el) return;
-  el.classList.remove("idle", "running", "ok", "error");
+  el.classList.remove("idle", "running", "ok", "error", "timeout");
   el.classList.add(status);
   if (meta.peerId) el.title = `peer id: ${meta.peerId}`;
+  const body = el.querySelector(".node-body");
   if (status === "running") {
-    const body = el.querySelector(".node-body");
-    if (body && !body.querySelector(".node-output")) {
+    // The editor is the originator, not a callee — showing it as "calling…"
+    // is misleading. Just rely on the running border + dot for it. For the
+    // peer nodes we keep the placeholder so it's clear the call is in flight.
+    if (name === "editor") {
+      const old = body?.querySelector(".node-output");
+      if (old) old.remove();
+    } else if (body && !body.querySelector(".node-output")) {
       // Clear any prior output but keep the static summary line.
       const summary = body.querySelector(".node-summary");
       body.innerHTML = "";
@@ -165,16 +392,51 @@ function setNodeStatus(name, status, meta = {}) {
   if (status === "idle") {
     const output = el.querySelector(".node-output");
     if (output) output.remove();
+    const sub = el.querySelector(".node-sub");
+    if (sub) sub.remove();
   }
-  if (status === "error") {
-    const body = el.querySelector(".node-body");
+  if (status === "error" || status === "timeout") {
     if (body) {
       const out = body.querySelector(".node-output") ?? document.createElement("div");
-      out.className = "node-output error";
-      out.textContent = meta.message ?? "error";
+      out.className = "node-output " + status;
+      out.textContent = meta.message ?? status;
       if (!out.parentNode) body.appendChild(out);
     }
   }
+  if (status === "ok") {
+    // Don't trample any output a previous applyToolResult call set up; only
+    // clear the placeholder/error from earlier states. Add a sub note if
+    // this node "forwarded" a downstream error.
+    if (body) {
+      const out = body.querySelector(".node-output");
+      if (out && (out.classList.contains("running") || out.classList.contains("error") || out.classList.contains("timeout"))) {
+        out.remove();
+      }
+      const existingSub = body.querySelector(".node-sub");
+      if (existingSub) existingSub.remove();
+      if (meta.sub) {
+        const sub = document.createElement("div");
+        sub.className = "node-sub";
+        sub.textContent = meta.sub;
+        body.appendChild(sub);
+      }
+    }
+  }
+}
+
+function messageMentions(message, peerName) {
+  if (!message || !peerName) return false;
+  const m = message.toLowerCase();
+  // Tolerate "citation-db" / "citation db" / "Citation-DB" etc.
+  return m.includes(peerName.toLowerCase()) ||
+    m.includes(peerName.toLowerCase().replace(/-/g, " "));
+}
+
+function cleanErrorMessage(msg) {
+  if (!msg) return "error";
+  // Strip nested "MCP error -32000: " prefixes the editor → fact-checker →
+  // citation-db chain accumulates so the displayed message is readable.
+  return msg.replace(/^(MCP error -?\d+:\s*)+/g, "").trim() || msg;
 }
 
 function setEdgeActive(name, active) {
@@ -297,6 +559,18 @@ function appendEvent(event) {
           event.ok
             ? event.tool
             : `${event.tool}: ${event.message ?? "error"}`,
+        ),
+      );
+      break;
+    case "tool-stale":
+      k.classList.add("end-bad");
+      k.textContent = "tool …";
+      body.append(
+        peerBadge(event.peer, event.peerId),
+        textNode(
+          `${event.tool}: no response after ${
+            event.elapsedMs ? Math.round(event.elapsedMs / 1000) + "s" : "stale"
+          }`,
         ),
       );
       break;
@@ -441,12 +715,26 @@ function renderHistoryEntry(entry, { append }) {
   }
 
   const link = document.createElement("a");
-  link.className = "history-trace";
   link.href = `${jaegerUiUrl}trace/${entry.traceId}`;
   link.target = "_blank";
   link.rel = "noopener";
-  link.textContent = `trace ${entry.traceId.slice(0, 8)}… →`;
-  link.title = `Open trace ${entry.traceId} in Jaeger`;
+  // The run is "complete" once status is no longer running. Until Jaeger
+  // confirms the trace is queryable, dim the link and tag it as indexing
+  // so users don't click into a 404. Server-side polling flips
+  // entry.traceReady to true via a `trace-ready` SSE event.
+  const runDone =
+    entry.status === "ok" ||
+    entry.status === "error" ||
+    entry.status === "timeout";
+  if (runDone && !entry.traceReady) {
+    link.className = "history-trace pending";
+    link.textContent = `trace ${entry.traceId.slice(0, 8)}… (indexing…)`;
+    link.title = `Trace ${entry.traceId} is being indexed by Jaeger; click anyway if you want to retry.`;
+  } else {
+    link.className = "history-trace";
+    link.textContent = `trace ${entry.traceId.slice(0, 8)}… →`;
+    link.title = `Open trace ${entry.traceId} in Jaeger`;
+  }
   meta.appendChild(link);
 
   li.appendChild(meta);
@@ -456,7 +744,7 @@ function renderHistoryEntry(entry, { append }) {
   prompt.textContent = truncate(entry.prompt ?? "", 200);
   li.appendChild(prompt);
 
-  if (entry.status === "error" && entry.error) {
+  if ((entry.status === "error" || entry.status === "timeout") && entry.error) {
     const err = document.createElement("div");
     err.className = "history-error";
     err.textContent = entry.error;
@@ -474,6 +762,7 @@ function renderHistoryEntry(entry, { append }) {
 function statusLabel(entry) {
   if (entry.status === "ok") return "ok";
   if (entry.status === "error") return "error";
+  if (entry.status === "timeout") return "timeout";
   return "running…";
 }
 
@@ -498,6 +787,7 @@ runBtn.addEventListener("click", async () => {
   runBtn.disabled = true;
   resultEl.hidden = true;
   resultEl.textContent = "";
+  resultEl.classList.remove("streaming");
   rateWarnEl.hidden = true;
   rateWarnEl.textContent = "";
   try {
@@ -511,12 +801,20 @@ runBtn.addEventListener("click", async () => {
       rateWarnEl.hidden = false;
       rateWarnEl.textContent =
         json.error ?? `rate limited (HTTP ${res.status})`;
+    } else if (res.status === 504 || json.timeout) {
+      resultEl.hidden = false;
+      resultEl.textContent = `timeout: ${json.error ?? "no response from editor"}`;
     } else if (!res.ok) {
       resultEl.hidden = false;
       resultEl.textContent = `error: ${json.error ?? res.statusText}`;
     } else {
       resultEl.hidden = false;
-      resultEl.textContent = json.text ?? "(no text)";
+      // Prefer the streamed buffer if it has content — the /run JSON only
+      // carries the *last* turn's text, while the buffer holds the full
+      // chain of reasoning that the viewer just watched type out.
+      if (!streamingBuffer) {
+        resultEl.textContent = json.text ?? "(no text)";
+      }
     }
   } catch (err) {
     resultEl.hidden = false;

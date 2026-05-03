@@ -5,6 +5,10 @@ const SERVICE_NAME = process.env.OTEL_SERVICE_NAME ?? "web-search";
 const AXL_URL = process.env.AXL_URL ?? "http://127.0.0.1:9002";
 const ROUTER_URL = process.env.MCP_ROUTER_URL ?? "http://127.0.0.1:9003";
 const MCP_PORT = Number(process.env.MCP_LISTEN_PORT ?? 7100);
+// Simulated work latency so the search span shows up as a visible bar in
+// Jaeger rather than a hairline. The hardcoded fixture lookup is otherwise
+// instantaneous, which makes the trace look broken to a viewer.
+const SEARCH_LATENCY_MS = Number(process.env.SEARCH_LATENCY_MS ?? 450);
 
 // Hardcoded result set per SPEC. Tiny relevance scoring by substring match
 // so different queries produce different orderings; everything else is fixed.
@@ -87,6 +91,9 @@ const tools: ToolDef[] = [
         Math.max(1, Number(args.limit ?? 3) || 3),
         FIXTURES.length,
       );
+      if (SEARCH_LATENCY_MS > 0) {
+        await new Promise((r) => setTimeout(r, SEARCH_LATENCY_MS));
+      }
       const ranked = FIXTURES.map((r) => ({ r, s: score(query, r.keywords) }))
         .sort((a, b) => b.s - a.s)
         .slice(0, limit)

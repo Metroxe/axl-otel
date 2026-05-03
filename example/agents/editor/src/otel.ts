@@ -79,7 +79,12 @@ class SsePublisherSpanProcessor implements SpanProcessor {
 
 function isPublicSpan(span: ReadableSpan | SDKSpan): boolean {
   const a = (span as ReadableSpan).attributes ?? {};
-  return Boolean(a["mcp.tool"] || a["mcp.service"] || a["editor.tool"]);
+  return Boolean(
+    a["mcp.tool"] ||
+      a["mcp.service"] ||
+      a["editor.tool"] ||
+      a["gen_ai.system"],
+  );
 }
 
 function extractAttrs(span: ReadableSpan | SDKSpan): Record<string, unknown> {
@@ -92,6 +97,15 @@ function extractAttrs(span: ReadableSpan | SDKSpan): Record<string, unknown> {
     "peer.id",
     "editor.tool",
     "originator_peer_id",
+    "gen_ai.system",
+    "gen_ai.request.model",
+    "gen_ai.response.stop_reason",
+    "gen_ai.usage.input_tokens",
+    "gen_ai.usage.output_tokens",
+    "gen_ai.usage.cache_read_input_tokens",
+    "gen_ai.usage.cache_creation_input_tokens",
+    "editor.turn",
+    "editor.tool_use.count",
   ]) {
     if (attrs[k] !== undefined) out[k] = attrs[k];
   }

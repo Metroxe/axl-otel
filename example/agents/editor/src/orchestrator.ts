@@ -78,6 +78,8 @@ export type OrchestrateOptions = {
   bus: EventBus;
   anthropic: Anthropic;
   onWorkflowStart?: (traceId: string) => void;
+  signal?: AbortSignal;
+  toolStaleMs?: number;
 };
 
 export type OrchestrateResult = {
@@ -114,18 +116,13 @@ export async function orchestrate(
             { role: "user", content: prompt },
           ];
 
-          let response: Anthropic.Message = await anthropic.messages.create({
-            model: MODEL,
-            max_tokens: 2048,
-            system: [
-              {
-                type: "text",
-                text: SYSTEM_PROMPT,
-                cache_control: { type: "ephemeral" },
-              },
-            ],
-            tools: TOOLS,
+          let response = await callClaude({
+            anthropic,
+            tracer,
+            bus,
             messages,
+            turn: 0,
+            signal: opts.signal,
           });
 
           let turn = 0;
@@ -140,7 +137,13 @@ export async function orchestrate(
                   const resultText = await runEditorTool(
                     tu.name,
                     tu.input as Record<string, unknown>,
-                    { axlUrl, tracer, bus },
+                    {
+                      axlUrl,
+                      tracer,
+                      bus,
+                      signal: opts.signal,
+                      toolStaleMs: opts.toolStaleMs,
+                    },
                   );
                   return {
                     type: "tool_result",
@@ -152,18 +155,13 @@ export async function orchestrate(
             messages.push({ role: "assistant", content: response.content });
             messages.push({ role: "user", content: toolResults });
 
-            response = await anthropic.messages.create({
-              model: MODEL,
-              max_tokens: 2048,
-              system: [
-                {
-                  type: "text",
-                  text: SYSTEM_PROMPT,
-                  cache_control: { type: "ephemeral" },
-                },
-              ],
-              tools: TOOLS,
+            response = await callClaude({
+              anthropic,
+              tracer,
+              bus,
               messages,
+              turn,
+              signal: opts.signal,
             });
           }
 
@@ -178,9 +176,22 @@ export async function orchestrate(
         },
       );
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const aborted = opts.signal?.aborted === true;
+      const reason = opts.signal?.reason;
+      const message = aborted
+        ? reason instanceof Error
+          ? reason.message
+          : String(reason ?? "timed out")
+        : err instanceof Error
+          ? err.message
+          : String(err);
       workflowSpan.setStatus({ code: SpanStatusCode.ERROR, message });
-      bus.publish({ type: "error", message, traceId });
+      bus.publish({
+        type: "error",
+        message,
+        traceId,
+        ...(aborted ? { timeout: true } : {}),
+      });
       throw err;
     } finally {
       workflowSpan.end();
@@ -195,6 +206,8 @@ async function runEditorTool(
     axlUrl: string;
     tracer: Tracer;
     bus: EventBus;
+    signal?: AbortSignal;
+    toolStaleMs?: number;
   },
 ): Promise<string> {
   // Resolve which mesh peer this tool maps to up-front so the SSE event
@@ -224,6 +237,25 @@ async function runEditorTool(
     input,
   });
 
+  // If the call doesn't return within `toolStaleMs`, surface a `tool-stale`
+  // event so the UI can flip the called peer (and its transitive child) to
+  // a "no response" state. The editor itself stays in the loop until the
+  // run-level abort signal fires — that's the demo: downstream visibly
+  // gives up while the editor keeps waiting.
+  let staleTimer: ReturnType<typeof setTimeout> | null = null;
+  const staleMs = ctx.toolStaleMs;
+  if (staleMs && staleMs > 0) {
+    staleTimer = setTimeout(() => {
+      ctx.bus.publish({
+        type: "tool-stale",
+        tool: name,
+        peer: route.peer,
+        peerId,
+        elapsedMs: staleMs,
+      });
+    }, staleMs);
+  }
+
   try {
     return await context.with(
       trace.setSpan(context.active(), span),
@@ -235,6 +267,7 @@ async function runEditorTool(
           tool: route.tool,
           args: input,
           tracer: ctx.tracer,
+          signal: ctx.signal,
         });
         ctx.bus.publish({
           type: "tool-end",
@@ -260,6 +293,7 @@ async function runEditorTool(
     });
     return JSON.stringify({ error: message });
   } finally {
+    if (staleTimer) clearTimeout(staleTimer);
     span.end();
   }
 }
@@ -268,3 +302,124 @@ const TOOL_ROUTES: Record<string, { peer: string; service: string; tool: string 
   research: { peer: "researcher", service: "researcher", tool: "research" },
   fact_check: { peer: "fact-checker", service: "fact-checker", tool: "check" },
 };
+
+// Wraps each Anthropic call in a `claude.messages.create` span. Without
+// this, Jaeger shows a multi-second gap of "nothing happening" between
+// tool calls; with it, the LLM time becomes a first-class span with
+// model, token, and cache-hit attributes — much more useful for the demo.
+async function callClaude(opts: {
+  anthropic: Anthropic;
+  tracer: Tracer;
+  bus: EventBus;
+  messages: Anthropic.MessageParam[];
+  turn: number;
+  signal?: AbortSignal;
+}): Promise<Anthropic.Message> {
+  const span = opts.tracer.startSpan("claude.messages.create", {
+    kind: SpanKind.CLIENT,
+    attributes: {
+      "gen_ai.system": "anthropic",
+      "gen_ai.operation.name": "chat",
+      "gen_ai.request.model": MODEL,
+      "gen_ai.request.max_tokens": 2048,
+      "gen_ai.request.streaming": true,
+      "editor.turn": opts.turn,
+      "editor.messages.count": opts.messages.length,
+    },
+  });
+  try {
+    return await context.with(
+      trace.setSpan(context.active(), span),
+      async () => {
+        // Stream the response so the UI can show Claude's text as it's
+        // being composed. Each text delta is published on the bus and
+        // forwarded over SSE; the call returns the assembled final
+        // message so the rest of the orchestration stays unchanged.
+        const stream = opts.anthropic.messages.stream(
+          {
+            model: MODEL,
+            max_tokens: 2048,
+            system: [
+              {
+                type: "text",
+                text: SYSTEM_PROMPT,
+                cache_control: { type: "ephemeral" },
+              },
+            ],
+            tools: TOOLS,
+            messages: opts.messages,
+          },
+          { signal: opts.signal },
+        );
+
+        opts.bus.publish({
+          type: "claude-stream-start",
+          turn: opts.turn,
+        });
+
+        stream.on("text", (textDelta: string) => {
+          opts.bus.publish({
+            type: "claude-text-delta",
+            turn: opts.turn,
+            text: textDelta,
+          });
+        });
+
+        const response = await stream.finalMessage();
+
+        opts.bus.publish({
+          type: "claude-stream-end",
+          turn: opts.turn,
+          stopReason: response.stop_reason ?? null,
+        });
+        span.setAttribute(
+          "gen_ai.response.model",
+          response.model ?? MODEL,
+        );
+        span.setAttribute(
+          "gen_ai.response.id",
+          response.id ?? "",
+        );
+        span.setAttribute(
+          "gen_ai.response.stop_reason",
+          response.stop_reason ?? "",
+        );
+        const u = response.usage;
+        if (u) {
+          span.setAttribute("gen_ai.usage.input_tokens", u.input_tokens);
+          span.setAttribute("gen_ai.usage.output_tokens", u.output_tokens);
+          if (u.cache_creation_input_tokens != null) {
+            span.setAttribute(
+              "gen_ai.usage.cache_creation_input_tokens",
+              u.cache_creation_input_tokens,
+            );
+          }
+          if (u.cache_read_input_tokens != null) {
+            span.setAttribute(
+              "gen_ai.usage.cache_read_input_tokens",
+              u.cache_read_input_tokens,
+            );
+          }
+        }
+        const toolUseCount = response.content.filter(
+          (b) => b.type === "tool_use",
+        ).length;
+        span.setAttribute("editor.tool_use.count", toolUseCount);
+        return response;
+      },
+    );
+  } catch (err) {
+    span.setStatus({
+      code: SpanStatusCode.ERROR,
+      message: err instanceof Error ? err.message : String(err),
+    });
+    opts.bus.publish({
+      type: "claude-stream-end",
+      turn: opts.turn,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
+  } finally {
+    span.end();
+  }
+}

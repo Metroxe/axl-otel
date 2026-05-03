@@ -5,6 +5,9 @@ const SERVICE_NAME = process.env.OTEL_SERVICE_NAME ?? "citation-db";
 const AXL_URL = process.env.AXL_URL ?? "http://127.0.0.1:9002";
 const ROUTER_URL = process.env.MCP_ROUTER_URL ?? "http://127.0.0.1:9003";
 const MCP_PORT = Number(process.env.MCP_LISTEN_PORT ?? 7100);
+// Simulated work latency before the demo error fires, so the failing span
+// shows up as a visible bar in Jaeger rather than a hairline.
+const LOOKUP_LATENCY_MS = Number(process.env.LOOKUP_LATENCY_MS ?? 350);
 
 const tools: ToolDef[] = [
   {
@@ -26,8 +29,13 @@ const tools: ToolDef[] = [
     // of the demo is to show a failure two hops down from the Editor —
     // Editor → Fact-Checker → Citation-DB — and prove that AXL OTel surfaces
     // an error originating on a peer the originator never directly addresses.
-    // The previous reputability-lookup implementation lives in git history.
+    // Fact-Checker re-throws the same string so the editor can attribute the
+    // failure back here in the mesh visual. The previous reputability-lookup
+    // implementation lives in git history.
     async handler() {
+      if (LOOKUP_LATENCY_MS > 0) {
+        await new Promise((r) => setTimeout(r, LOOKUP_LATENCY_MS));
+      }
       throw new Error(
         "DEMO: This is an example error thrown in citation-db for demonstrative purposes. " +
           "It surfaces in the Editor's trace via AXL OTel even though Citation-DB lives " +
