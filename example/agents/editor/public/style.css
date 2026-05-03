@@ -66,6 +66,10 @@ body.demo {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
+}
+@media (max-width: 880px) {
+  .brand-sub { display: none; }
 }
 
 .topbar-meta {
@@ -155,27 +159,6 @@ body.demo {
   flex: 1;
   min-width: 0;
 }
-.demo-note-link {
-  margin-left: 0.6rem;
-  padding: 2px 0.55rem;
-  background: rgba(122, 162, 247, 0.1);
-  border: 1px solid rgba(122, 162, 247, 0.4);
-  border-radius: 999px;
-  color: var(--accent);
-  font: inherit;
-  font-size: 0.76rem;
-  font-weight: 500;
-  cursor: pointer;
-  text-decoration: none;
-  white-space: nowrap;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
-}
-.demo-note-link:hover {
-  background: rgba(122, 162, 247, 0.2);
-  border-color: var(--accent);
-}
 
 /* ---------- about dialog ---------- */
 
@@ -244,6 +227,19 @@ body.demo {
 
 .about-section { margin: 0 0 1.1rem; }
 .about-section:last-of-type { margin-bottom: 0; }
+
+.about-dialog .about-lead {
+  margin: 0 0 1.25rem;
+  padding: 0.85rem 1rem;
+  background: rgba(122, 162, 247, 0.06);
+  border: 1px solid rgba(122, 162, 247, 0.25);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--text);
+}
+.about-dialog .about-lead strong { color: var(--text); font-weight: 600; }
 
 .about-dialog p,
 .about-dialog ol,

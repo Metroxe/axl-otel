@@ -7,7 +7,6 @@ const historyEl = document.getElementById("history");
 const rateWarnEl = document.getElementById("rate-warn");
 const aboutDialogEl = document.getElementById("about-dialog");
 const aboutBtnEl = document.getElementById("about-btn");
-const aboutLinkEl = document.getElementById("about-link");
 const aboutCloseEl = document.getElementById("about-close");
 const jaegerLinkEls = [
   document.getElementById("jaeger-link"),
@@ -31,7 +30,6 @@ function closeAboutDialog() {
   }
 }
 aboutBtnEl?.addEventListener("click", openAboutDialog);
-aboutLinkEl?.addEventListener("click", openAboutDialog);
 aboutCloseEl?.addEventListener("click", closeAboutDialog);
 aboutDialogEl?.addEventListener("click", (event) => {
   if (event.target === aboutDialogEl) closeAboutDialog();

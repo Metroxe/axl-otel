@@ -86,7 +86,9 @@
     <header class="topbar">
       <div class="brand">
         <strong>AXL&nbsp;OTel</strong>
-        <span class="brand-sub">peer-to-peer distributed tracing</span>
+        <span class="brand-sub">
+          OpenTelemetry for AXL · debug agents you own and the ones you don't
+        </span>
       </div>
       <div class="topbar-meta">
         <span class="peer-pill" title="Editor peer id">
@@ -109,8 +111,8 @@
     <dialog id="about-dialog" class="about-dialog">
       <article>
         <header class="about-head">
-          <div class="about-eyebrow">Demo</div>
-          <h2>What this is even showing</h2>
+          <div class="about-eyebrow">Project</div>
+          <h2>OpenTelemetry for AXL meshes</h2>
           <button
             id="about-close"
             class="about-close"
@@ -119,14 +121,25 @@
           >×</button>
         </header>
 
+        <p class="about-lead">
+          <strong>axl-otel adds OpenTelemetry distributed tracing to
+          AXL.</strong> It lets you debug not just the agents you
+          wrote, but the ones your agents talk to. That includes peers
+          you've never directly addressed, two or three hops deep into
+          the network. Every cooperating agent's spans come home to
+          one trace, scoped per request, routed over AXL itself.
+        </p>
+
         <section class="about-section">
-          <h3>The problem</h3>
+          <h3>Why it matters</h3>
           <p>
             AXL is peer-to-peer. Your agents address other agents by
             public key, and those agents talk to peers you've never
             heard of. Three hops in, something errors and your agent
             has no idea. No log, no trace, no path back. The deeper
-            the call chain, the darker it gets.
+            the call chain, the darker it gets. axl-otel routes the
+            trace home over AXL itself so you actually see what
+            happened.
           </p>
         </section>
 
@@ -224,11 +237,6 @@
           is rigged to fail at Citation-DB two hops away
           (<code>demo-fail.example.com</code>), and the whole demo is
           watching that failure come back over OTel.
-          <button
-            id="about-link"
-            type="button"
-            class="demo-note-link"
-          >What is this? →</button>
         </span>
       </div>
       <textarea
