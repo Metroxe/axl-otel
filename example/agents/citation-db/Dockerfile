@@ -24,11 +24,15 @@ WORKDIR /sidecar
 COPY sidecar/package.json sidecar/bun.lock ./
 RUN bun install --frozen-lockfile
 COPY sidecar/src ./src
+RUN bun build --compile --minify --target=bun-linux-x64-baseline \
+      src/index.ts --outfile sidecar
 
 WORKDIR /app
 COPY example/agents/citation-db/package.json ./
 RUN bun install
 COPY example/agents/citation-db/src ./src
+RUN bun build --compile --minify --target=bun-linux-x64-baseline \
+      src/index.ts --outfile agent
 COPY example/agents/citation-db/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 

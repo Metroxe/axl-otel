@@ -24,14 +24,25 @@ WORKDIR /sidecar
 COPY sidecar/package.json sidecar/bun.lock ./
 RUN bun install --frozen-lockfile
 COPY sidecar/src ./src
+# Compile for baseline x64 (no AVX) so the binary runs everywhere — both
+# the Proxmox demo VPS and Apple-Silicon Macs running linux/amd64 under
+# Rosetta lack AVX, and the auto-detected target produces a binary that
+# segfaults in those environments.
+RUN bun build --compile --minify --target=bun-linux-x64-baseline \
+      src/index.ts --outfile sidecar
 
 WORKDIR /app
 COPY example/agents/editor/package.json ./
 RUN bun install
 COPY example/agents/editor/src ./src
 COPY example/agents/editor/public ./public
+RUN bun build --compile --minify --target=bun-linux-x64-baseline \
+      src/index.ts --outfile agent
 COPY example/agents/editor/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
+# Compiled binary can't resolve `import.meta.url` to a real on-disk path,
+# so pin PUBLIC_DIR to where the public dir was COPY'd above.
+ENV PUBLIC_DIR=/app/public
 
 ENV AXL_URL=http://127.0.0.1:9002 \
     AXL_CONFIG=/etc/axl/node-config.json \

@@ -34,7 +34,7 @@ if [[ -z "${SIDECAR_DISABLED:-}" ]]; then
     SIDECAR_ARGS+=(--receive)
   fi
   cd /sidecar
-  bun run src/index.ts "${SIDECAR_ARGS[@]}" &
+  ./sidecar "${SIDECAR_ARGS[@]}" &
   SIDECAR_PID=$!
 else
   echo "entrypoint: SIDECAR_DISABLED set — observability transport off" >&2
@@ -48,7 +48,7 @@ fi
 
 # 4. Editor — Bun HTTP server on :8080 (frontend + /run + /events).
 cd /app
-bun run src/index.ts &
+./agent &
 APP_PID=$!
 
 shutdown() {

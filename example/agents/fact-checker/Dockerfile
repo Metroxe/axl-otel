@@ -24,11 +24,15 @@ WORKDIR /sidecar
 COPY sidecar/package.json sidecar/bun.lock ./
 RUN bun install --frozen-lockfile
 COPY sidecar/src ./src
+RUN bun build --compile --minify --target=bun-linux-x64-baseline \
+      src/index.ts --outfile sidecar
 
 WORKDIR /app
 COPY example/agents/fact-checker/package.json ./
 RUN bun install
 COPY example/agents/fact-checker/src ./src
+RUN bun build --compile --minify --target=bun-linux-x64-baseline \
+      src/index.ts --outfile agent
 COPY example/agents/fact-checker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
