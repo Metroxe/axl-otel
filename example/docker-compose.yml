@@ -27,6 +27,15 @@ services:
       OTLP_URL: http://jaeger:4318
       OTEL_SERVICE_NAME: editor
       SIDECAR_RECEIVE: "1"
+      # Sidecar's --receive mode pulls inbound spans off /recv. With this URL
+      # set, it ALSO POSTs each decoded payload here so the editor app can
+      # forward the spans onto its SSE bus and drive the live mesh visual
+      # for downstream peers (web-search, citation-db).
+      INBOUND_CALLBACK_URL: http://127.0.0.1:8080/internal/inbound-spans
+      # Set to "1" (or anything non-empty) to skip starting the sidecar in
+      # every container. Used by the demo's "broken" recording to show what
+      # debugging on AXL looks like with no observability transport.
+      SIDECAR_DISABLED: ${SIDECAR_DISABLED:-}
       # Public Jaeger URL exposed by the reverse proxy. The Editor serves
       # the frontend at the apex and Jaeger under /jaeger/ on the same host.
       JAEGER_UI_URL: ${JAEGER_UI_URL:-/jaeger/}
@@ -65,6 +74,7 @@ services:
       # span ever fell into the "forward locally" branch, you'd see an
       # ECONNREFUSED in the logs instead of silent direct delivery.
       OTLP_URL: http://127.0.0.1:65535
+      SIDECAR_DISABLED: ${SIDECAR_DISABLED:-}
     volumes:
       - ./keys/researcher.pem:/etc/axl/private.pem:ro
       - ./configs/researcher/node-config.json:/etc/axl/node-config.json:ro
@@ -85,6 +95,7 @@ services:
     environment:
       OTEL_SERVICE_NAME: web-search
       OTLP_URL: http://127.0.0.1:65535
+      SIDECAR_DISABLED: ${SIDECAR_DISABLED:-}
     volumes:
       - ./keys/web-search.pem:/etc/axl/private.pem:ro
       - ./configs/web-search/node-config.json:/etc/axl/node-config.json:ro
@@ -105,6 +116,7 @@ services:
     environment:
       OTEL_SERVICE_NAME: fact-checker
       OTLP_URL: http://127.0.0.1:65535
+      SIDECAR_DISABLED: ${SIDECAR_DISABLED:-}
     volumes:
       - ./keys/fact-checker.pem:/etc/axl/private.pem:ro
       - ./configs/fact-checker/node-config.json:/etc/axl/node-config.json:ro
@@ -125,6 +137,7 @@ services:
     environment:
       OTEL_SERVICE_NAME: citation-db
       OTLP_URL: http://127.0.0.1:65535
+      SIDECAR_DISABLED: ${SIDECAR_DISABLED:-}
     volumes:
       - ./keys/citation-db.pem:/etc/axl/private.pem:ro
       - ./configs/citation-db/node-config.json:/etc/axl/node-config.json:ro

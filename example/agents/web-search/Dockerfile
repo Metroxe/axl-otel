@@ -33,6 +33,7 @@ WORKDIR /app
 COPY example/agents/web-search/package.json ./
 RUN bun install
 COPY example/agents/web-search/src ./src
+RUN bun build --compile --minify src/index.ts --outfile agent
 COPY example/agents/web-search/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 

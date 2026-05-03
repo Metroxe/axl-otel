@@ -3,6 +3,10 @@ import { SpanKind } from "@opentelemetry/api";
 import { initOtel } from "./otel.ts";
 import { orchestrate } from "./orchestrator.ts";
 import { EventBus } from "./sse.ts";
+import {
+  publishInboundSpans,
+  type ExportTraceServiceRequest,
+} from "./inbound-spans.ts";
 
 const SERVICE_NAME = process.env.OTEL_SERVICE_NAME ?? "editor";
 const AXL_URL = process.env.AXL_URL ?? "http://127.0.0.1:9002";
@@ -187,7 +191,12 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const PUBLIC_DIR = new URL("../public/", import.meta.url).pathname;
+// In compiled mode (`bun build --compile`) `import.meta.url` points to a
+// virtual path inside the binary, so we let the Dockerfile pin PUBLIC_DIR
+// to an absolute on-disk location. Local dev still falls back to the
+// relative-to-source resolution.
+const PUBLIC_DIR =
+  process.env.PUBLIC_DIR ?? new URL("../public/", import.meta.url).pathname;
 
 function sseStream(req: Request): Response {
   let unsubscribe: (() => void) | null = null;
@@ -287,6 +296,25 @@ Bun.serve({
 
     if (url.pathname === "/events" && req.method === "GET") {
       return sseStream(req);
+    }
+
+    // Sidecar fan-out: --inbound-callback-url POSTs OTLP/JSON payloads it
+    // pulled off AXL /recv. We translate them into span-start/span-end SSE
+    // events so the live mesh visual reflects remote-peer activity.
+    // Localhost-only because the sidecar always lives in this container.
+    if (url.pathname === "/internal/inbound-spans" && req.method === "POST") {
+      const remote = req.headers.get("x-forwarded-for") ?? "";
+      if (remote && !remote.startsWith("127.")) {
+        return new Response("forbidden", { status: 403 });
+      }
+      let payload: ExportTraceServiceRequest;
+      try {
+        payload = (await req.json()) as ExportTraceServiceRequest;
+      } catch {
+        return Response.json({ error: "invalid JSON" }, { status: 400 });
+      }
+      const count = publishInboundSpans(bus, payload);
+      return Response.json({ ok: true, published: count });
     }
 
     if (url.pathname === "/run" && req.method === "POST") {

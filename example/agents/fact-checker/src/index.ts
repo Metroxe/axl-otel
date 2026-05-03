@@ -109,15 +109,16 @@ const tools: ToolDef[] = [
         const verdict = judge(lookup.verdicts);
         return { claim, ...verdict, sources: lookup.verdicts };
       } catch (err) {
+        // Wrap whatever happened downstream in a generic message so the
+        // originator can't tell *which* peer failed from the JSON-RPC
+        // error alone. The actual peer-and-message identification has to
+        // come back through OTel — which is the whole point of the demo.
+        // The original error stays on this peer's span so a sidecar-on
+        // run still surfaces it.
         if (ctrl.signal.aborted) {
-          const reason = ctrl.signal.reason;
-          throw new Error(
-            reason instanceof Error
-              ? reason.message
-              : String(reason ?? "citation-db timeout"),
-          );
+          throw new Error("fact check failed: upstream lookup unavailable");
         }
-        throw err;
+        throw new Error("fact check failed: upstream lookup unavailable");
       } finally {
         clearTimeout(timer);
       }

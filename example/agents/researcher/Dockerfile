@@ -30,6 +30,7 @@ WORKDIR /app
 COPY example/agents/researcher/package.json ./
 RUN bun install
 COPY example/agents/researcher/src ./src
+RUN bun build --compile --minify src/index.ts --outfile agent
 COPY example/agents/researcher/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 

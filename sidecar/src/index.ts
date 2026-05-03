@@ -12,6 +12,7 @@ type CliOptions = {
   listenHost: string;
   listenPort: number;
   pollIntervalMs: number;
+  inboundCallbackUrl?: string;
 };
 
 async function run(opts: CliOptions): Promise<void> {
@@ -75,6 +76,33 @@ async function run(opts: CliOptions): Promise<void> {
     },
   });
 
+  // Optional fan-out for inbound spans. When set, every successfully-decoded
+  // /recv payload is also POSTed to this URL — used by the example editor to
+  // surface remote-peer activity in its live mesh panel without piping every
+  // span through Jaeger first.
+  async function fanoutToCallback(
+    payload: ExportTraceServiceRequest,
+  ): Promise<void> {
+    if (!opts.inboundCallbackUrl) return;
+    try {
+      const res = await fetch(opts.inboundCallbackUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        console.error(
+          `axl-otel: inbound callback ${opts.inboundCallbackUrl} returned ${res.status}`,
+        );
+      }
+    } catch (err) {
+      console.error(
+        `axl-otel: inbound callback ${opts.inboundCallbackUrl} failed:`,
+        err,
+      );
+    }
+  }
+
   let stopPoller: (() => void) | null = null;
   if (opts.receive) {
     stopPoller = startPoller({
@@ -83,7 +111,7 @@ async function run(opts: CliOptions): Promise<void> {
       async onMessage(msg) {
         const payload = extractOtlpPayload(msg);
         if (!payload) return;
-        await forwardToBackend(payload);
+        await Promise.all([forwardToBackend(payload), fanoutToCallback(payload)]);
       },
     });
   }
@@ -153,6 +181,12 @@ program
     new Option("--poll-interval-ms <ms>", "/recv poll interval in --receive mode")
       .default(1000)
       .argParser((v) => Number(v)),
+  )
+  .addOption(
+    new Option(
+      "--inbound-callback-url <url>",
+      "Optional URL to POST decoded /recv payloads to alongside the OTLP backend (used for live UI fan-out)",
+    ).env("INBOUND_CALLBACK_URL"),
   )
   .action((opts: CliOptions) => run(opts));
 

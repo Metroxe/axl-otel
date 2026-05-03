@@ -38,11 +38,17 @@ if [[ -z "${SIDECAR_DISABLED:-}" ]]; then
   SIDECAR_PID=$!
 else
   echo "entrypoint: SIDECAR_DISABLED set — observability transport off" >&2
+  # Originator owns Jaeger directly. Without the sidecar, the editor's own
+  # spans would otherwise hit a dead :4318 — point them straight at Jaeger
+  # so the demo's broken-path still shows what the originator can see by
+  # itself (its own outbound calls, no peer bodies).
+  export OTEL_EXPORTER_OTLP_ENDPOINT="${OTLP_URL:-http://jaeger:4318}"
+  echo "entrypoint: editor exporting OTLP directly to ${OTEL_EXPORTER_OTLP_ENDPOINT}" >&2
 fi
 
 # 4. Editor — Bun HTTP server on :8080 (frontend + /run + /events).
 cd /app
-bun --smol run src/index.ts &
+./agent &
 APP_PID=$!
 
 shutdown() {

@@ -35,8 +35,12 @@ COPY example/agents/editor/package.json ./
 RUN bun install
 COPY example/agents/editor/src ./src
 COPY example/agents/editor/public ./public
+RUN bun build --compile --minify src/index.ts --outfile agent
 COPY example/agents/editor/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
+# Compiled binary can't resolve `import.meta.url` to a real on-disk path,
+# so pin PUBLIC_DIR to where the public dir was COPY'd above.
+ENV PUBLIC_DIR=/app/public
 
 ENV AXL_URL=http://127.0.0.1:9002 \
     AXL_CONFIG=/etc/axl/node-config.json \

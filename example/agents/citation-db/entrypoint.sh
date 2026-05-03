@@ -41,7 +41,7 @@ fi
 
 # 4. Agent code — registers an MCP server with the router and serves tools.
 cd /app
-bun --smol run src/index.ts &
+./agent &
 APP_PID=$!
 
 shutdown() {

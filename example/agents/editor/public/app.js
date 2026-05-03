@@ -56,6 +56,16 @@ const NODE_TO_CHILD = {
 const NODE_TO_PARENT = Object.fromEntries(
   Object.entries(NODE_TO_CHILD).map(([p, c]) => [c, p]),
 );
+// Mesh-panel nodes the frontend knows how to render. Used to filter the
+// span-driven reveal so a stray span with an unrelated mcp.service value
+// (e.g. an internal sub-step) doesn't try to reveal a non-existent node.
+const KNOWN_NODES = new Set([
+  "editor",
+  "researcher",
+  "fact-checker",
+  "web-search",
+  "citation-db",
+]);
 
 const events = new EventSource("/events");
 
@@ -118,20 +128,10 @@ events.addEventListener("message", (msg) => {
       revealEdge(`editor-${node}`);
       setEdgeActive(`editor-${node}`, true);
       setNodeStatus(node, "running", { peerId: event.peerId });
-      const child = NODE_TO_CHILD[node];
-      if (child) {
-        // Stagger the transitive child so the chain visibly extends one
-        // hop further rather than popping in all at once. Track the timer
-        // so tool-end can cancel it if the call returns first.
-        const handle = setTimeout(() => {
-          pendingChildReveals.delete(event.tool);
-          revealNode(child);
-          revealEdge(`${node}-${child}`);
-          setEdgeActive(`${node}-${child}`, true);
-          setNodeStatus(child, "running");
-        }, TRANSITIVE_REVEAL_DELAY_MS);
-        pendingChildReveals.set(event.tool, handle);
-      }
+      // Downstream peers (web-search / citation-db) are revealed only when
+      // their spans actually arrive via the sidecar's /recv fan-out. With
+      // the sidecar disabled, no span ever lands, so those cards stay dark
+      // — that's the whole point of the broken-path demo.
     }
   } else if (event.type === "tool-stale") {
     staleTools.add(event.tool);
@@ -141,19 +141,11 @@ events.addEventListener("message", (msg) => {
     const node = TOOL_TO_NODE[event.tool];
     if (node) {
       setEdgeActive(`editor-${node}`, false);
-      const child = NODE_TO_CHILD[node];
-      let editorMsg;
-      if (child) {
-        revealNode(child);
-        revealEdge(`${node}-${child}`);
-        setEdgeActive(`${node}-${child}`, false);
-        setNodeStatus(child, "error", { message: "no response" });
-        editorMsg = `downstream timeout from ${child}`;
-        setNodeStatus(node, "error", { message: editorMsg });
-      } else {
-        editorMsg = "no response";
-        setNodeStatus(node, "error", { message: editorMsg });
-      }
+      // We can't claim a downstream timeout from a peer the editor never
+      // saw a span from — that would be a JSON-RPC inference, not a fact.
+      // Just mark the directly-called peer and editor as failed.
+      const editorMsg = "no response";
+      setNodeStatus(node, "error", { message: editorMsg });
       setNodeStatus("editor", "error", { message: editorMsg });
     }
   } else if (event.type === "tool-end") {
@@ -161,36 +153,23 @@ events.addEventListener("message", (msg) => {
     const node = TOOL_TO_NODE[event.tool];
     if (node) {
       setEdgeActive(`editor-${node}`, false);
-      const child = NODE_TO_CHILD[node];
-      if (child) {
-        // Make sure the child is on screen (and its edge drawn) before we
-        // try to set its status — otherwise a fast tool would land before
-        // the staggered reveal had a chance to run, and the result would
-        // be applied to an invisible node.
-        revealNode(child);
-        revealEdge(`${node}-${child}`);
-        setEdgeActive(`${node}-${child}`, false);
-      }
       if (staleTools.has(event.tool)) {
         // Already flipped by tool-stale; preserve that visual.
       } else if (event.ok) {
+        // applyToolResult writes the rich payload (titles, verdicts) onto
+        // both the directly-called node and its child. The child stays
+        // invisible until its own span event reveals it — so in broken-path
+        // the DOM is populated but never displayed. In fixed-path the span
+        // arrives via /recv → callback and the rich content "wakes up".
         applyToolResult(node, event.result);
       } else {
         runHadToolError = true;
         refreshEditorActivity();
-        const rawMsg = event.message ?? "error";
-        const cleaned = cleanErrorMessage(rawMsg);
-        // The downstream peer (e.g. citation-db) originated the failure;
-        // the direct peer (e.g. fact-checker) propagated it back to the
-        // editor. Show the same propagated message on every hop so the
-        // chain — origin → propagator → editor — is visible end-to-end.
-        if (child && messageMentions(rawMsg, child)) {
-          setNodeStatus(child, "error", { message: cleaned });
-          setNodeStatus(node, "error", { message: cleaned });
-        } else {
-          setNodeStatus(node, "error", { message: cleaned });
-          if (child) setNodeStatus(child, "idle");
-        }
+        const cleaned = cleanErrorMessage(event.message ?? "error");
+        // Only mark the directly-called peer and the editor. A downstream
+        // peer's failure can only be claimed if its own error span actually
+        // arrived — that's handled in the span-end branch below.
+        setNodeStatus(node, "error", { message: cleaned });
         setNodeStatus("editor", "error", { message: cleaned });
       }
     }
@@ -257,6 +236,26 @@ events.addEventListener("message", (msg) => {
       if (event.type === "span-start") claudeActiveCount += 1;
       else claudeActiveCount = Math.max(0, claudeActiveCount - 1);
       refreshEditorActivity();
+    }
+    // Reveal the mesh node corresponding to this span. Spans created by the
+    // editor's own SDK (mcp.service for the directly-called peer) and spans
+    // arriving via the sidecar's /recv fan-out (peer.name for downstream
+    // peers) both flow through here. Without the sidecar, no /recv-sourced
+    // spans land — so web-search and citation-db never get revealed.
+    const peerName = attrs["mcp.service"] ?? attrs["peer.name"];
+    if (peerName && KNOWN_NODES.has(peerName)) {
+      revealNode(peerName);
+      const parent = NODE_TO_PARENT[peerName];
+      if (parent) revealEdge(`${parent}-${peerName}`);
+      else if (peerName !== "editor") revealEdge(`editor-${peerName}`);
+      // Surface error status from the inbound span so the originating peer
+      // (e.g. citation-db) carries the failure visibly, not just its parent.
+      if (event.type === "span-end" && event.span?.statusCode === 2) {
+        const msg = cleanErrorMessage(
+          event.span.statusMessage ?? "error",
+        );
+        setNodeStatus(peerName, "error", { message: msg });
+      }
     }
   }
   appendEvent(event);
