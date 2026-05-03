@@ -4,6 +4,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>AXL OTel demo · Editor</title>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <meta
       name="description"
       content="Live demo of AXL OpenTelemetry: a drop-in OTLP sidecar that turns AXL's peer-to-peer mesh into an OpenTelemetry transport. Watch a request fan out across five agents and every span come back home."
@@ -20,6 +25,25 @@
       content="A drop-in OTLP sidecar. Every span from every agent flows back to the originator — no central collector, no shared infra."
     />
     <meta property="og:url" content="https://axl-otel-demo.boilerroom.tech/" />
+    <!--
+      og:image is a GIF so Discord / Slack / Telegram animate it inline.
+      Facebook, Twitter, LinkedIn, iMessage extract the first frame and show
+      it static — the Cover composition is phase-shifted so frame 0 is the
+      visually rich peak (return particles in flight, halo glowing at HOME),
+      not the empty pre-pulse state. og-cover.png is kept as a same-frame
+      PNG fallback for crawlers that 404 on the GIF.
+    -->
+    <meta
+      property="og:image"
+      content="https://axl-otel-demo.boilerroom.tech/og-cover.gif"
+    />
+    <meta property="og:image:type" content="image/gif" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="A request fans out across an AXL mesh and every span comes back home"
+    />
     <meta
       property="og:image"
       content="https://axl-otel-demo.boilerroom.tech/og-cover.png"
@@ -43,7 +67,7 @@
     />
     <meta
       name="twitter:image"
-      content="https://axl-otel-demo.boilerroom.tech/og-cover.png"
+      content="https://axl-otel-demo.boilerroom.tech/og-cover.gif"
     />
     <meta
       name="twitter:image:alt"
